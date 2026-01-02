@@ -49,6 +49,7 @@ public enum FrameworkType
     DotNet = 16,
     Go = 17,
     Rust = 18,
+    Other = 50,
     Custom = 99
 }
 
@@ -126,6 +127,7 @@ public static class FrameworkTypeExtensions
         FrameworkType.DotNet => ".NET",
         FrameworkType.Go => "Go",
         FrameworkType.Rust => "Rust",
+        FrameworkType.Other => "Other",
         FrameworkType.Custom => "Custom",
         _ => "Unknown"
     };
