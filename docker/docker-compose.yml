@@ -1,0 +1,60 @@
+# XcluadeAgent Docker Compose
+# Developed by xman studio | https://xman4289.com
+
+version: '3.8'
+
+services:
+  xcluadeagent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: xcluadeagent
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - xcluade_data:/app/data
+      - xcluade_config:/app/config
+      # Mount your web directories (adjust paths as needed)
+      # - /var/www:/var/www
+    environment:
+      - XCLUADE_SECURITY__JWTSECRET=${JWT_SECRET:-change_this_to_a_random_string}
+      - XCLUADE_GITHUB__ACCESSTOKEN=${GITHUB_TOKEN}
+      - XCLUADE_GITHUB__WEBHOOKSECRET=${GITHUB_WEBHOOK_SECRET}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - xcluade_network
+
+  # Optional: Ollama for local AI
+  ollama:
+    image: ollama/ollama:latest
+    container_name: xcluade_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    # Uncomment for GPU support (NVIDIA)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    networks:
+      - xcluade_network
+    profiles:
+      - ai
+
+volumes:
+  xcluade_data:
+  xcluade_config:
+  ollama_data:
+
+networks:
+  xcluade_network:
+    driver: bridge

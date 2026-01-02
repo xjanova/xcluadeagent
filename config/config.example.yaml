@@ -1,0 +1,173 @@
+# XcluadeAgent Configuration
+# Developed by xman studio | https://xman4289.com
+#
+# Copy this file to config.yaml and customize as needed.
+# Environment variables can override any setting using XCLUADE_ prefix
+# Example: XCLUADE_GITHUB__ACCESSTOKEN=your_token
+
+app:
+  name: XcluadeAgent
+  version: 1.0.0
+  developer: xman studio
+  website: https://xman4289.com
+
+# Server Configuration
+server:
+  host: 0.0.0.0
+  port: 5000
+  # External URL (for webhooks)
+  # externalUrl: https://sync.yourdomain.com
+  useHttps: false
+  # certificatePath: /path/to/cert.pem
+  # certificatePassword: your_password
+
+# Database Configuration
+database:
+  provider: sqlite
+  connectionString: Data Source=data/xcluadeagent.db
+
+# GitHub Configuration
+github:
+  # Personal Access Token (required)
+  # Create at: https://github.com/settings/tokens
+  # Required scopes: repo (for private repos)
+  accessToken: ${GITHUB_TOKEN}
+
+  # Webhook secret for verification
+  webhookSecret: ${GITHUB_WEBHOOK_SECRET}
+
+  # GitHub Enterprise (optional)
+  # apiBaseUrl: https://github.mycompany.com/api/v3
+
+  retryCount: 3
+  retryDelayMs: 1000
+
+# AI Configuration
+ai:
+  enabled: false
+
+  # AI Mode: off | alert | suggest | review | sandbox | auto
+  # See documentation for details on each mode
+  mode: suggest
+
+  # Primary AI Provider (Ollama - Local, Free)
+  primary:
+    type: ollama
+    endpoint: http://localhost:11434
+    model: qwen2.5-coder:7b
+    timeoutSeconds: 60
+    maxTokens: 4096
+
+  # Fallback Provider (Claude API - for complex tasks)
+  # fallback:
+  #   type: claude
+  #   apiKey: ${CLAUDE_API_KEY}
+  #   model: claude-3-5-sonnet-20241022
+  #   timeoutSeconds: 120
+  #   maxTokens: 4096
+
+  # Cost Control (for paid APIs)
+  costControl:
+    monthlyBudgetUsd: 10
+    warnAtPercent: 80
+    stopAtLimit: true
+
+  # Safety Settings
+  safety:
+    requireApproval: true
+    maxFilesPerFix: 5
+    excludedPaths:
+      - ".env*"
+      - "**/config/*"
+      - "**/credentials/*"
+      - "**/*.key"
+      - "**/*.pem"
+    allowDatabaseMigrations: false
+    requireTestPass: true
+
+# Notification Configuration
+notifications:
+  # Email (SMTP)
+  email:
+    enabled: false
+    smtpHost: smtp.gmail.com
+    smtpPort: 587
+    useSsl: true
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    fromAddress: noreply@yourdomain.com
+    fromName: XcluadeAgent
+
+  # Discord
+  discord:
+    enabled: false
+    webhookUrl: ${DISCORD_WEBHOOK_URL}
+
+  # Telegram
+  telegram:
+    enabled: false
+    botToken: ${TELEGRAM_BOT_TOKEN}
+    defaultChatId: ${TELEGRAM_CHAT_ID}
+
+  # LINE Official Account
+  lineOA:
+    enabled: false
+    channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
+    channelSecret: ${LINE_CHANNEL_SECRET}
+    defaultUserId: ${LINE_USER_ID}
+
+  # Slack
+  slack:
+    enabled: false
+    webhookUrl: ${SLACK_WEBHOOK_URL}
+
+  # Custom Webhooks
+  webhooks: []
+  # - name: My Webhook
+  #   url: https://myserver.com/webhook
+  #   secret: my_secret
+  #   events:
+  #     - sync.completed
+  #     - sync.failed
+
+# Security Configuration
+security:
+  # JWT Secret (REQUIRED - generate a random string)
+  # Generate with: openssl rand -base64 32
+  jwtSecret: ${JWT_SECRET}
+
+  jwtExpirationMinutes: 1440  # 24 hours
+  refreshTokenExpirationDays: 30
+  maxFailedLogins: 5
+  lockoutMinutes: 15
+  requireTwoFactor: false
+
+  # CORS allowed origins
+  allowedOrigins:
+    - http://localhost:5000
+    - http://localhost:3000
+
+# Backup Configuration
+backup:
+  basePath: data/backups
+  defaultMaxBackups: 5
+  compressionType: gzip  # none, gzip, zip
+  includeDatabase: true
+
+# License Configuration
+license:
+  # License key (optional - Community edition is free)
+  # key: XXXX-XXXX-XXXX-XXXX
+
+  validationEndpoint: https://api.github.com/repos/xjanova/xmanstudio/contents/licenses
+  validationIntervalHours: 24
+  allowOffline: true
+  offlineGraceDays: 7
+
+# Logging Configuration
+logging:
+  level: Information  # Trace, Debug, Information, Warning, Error, Critical
+  path: data/logs
+  retentionDays: 30
+  enableConsole: true
+  enableFile: true

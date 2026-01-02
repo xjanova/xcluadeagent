@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>XcluadeAgent.Worker</RootNamespace>
+    <Company>xman studio</Company>
+    <Product>XcluadeAgent</Product>
+    <Authors>xman studio</Authors>
+    <Description>Background worker service for XcluadeAgent</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XcluadeAgent.Core\XcluadeAgent.Core.csproj" />
+    <ProjectReference Include="..\XcluadeAgent.Shared\XcluadeAgent.Shared.csproj" />
+    <ProjectReference Include="..\XcluadeAgent.Infrastructure\XcluadeAgent.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Cronos" Version="0.8.4" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>XcluadeAgent.Cli</RootNamespace>
+    <AssemblyName>syncctl</AssemblyName>
+    <Company>xman studio</Company>
+    <Product>XcluadeAgent</Product>
+    <Authors>xman studio</Authors>
+    <Description>CLI tool for XcluadeAgent</Description>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>syncctl</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XcluadeAgent.Core\XcluadeAgent.Core.csproj" />
+    <ProjectReference Include="..\XcluadeAgent.Shared\XcluadeAgent.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,273 @@
+@page "/"
+@using XcluadeAgent.Shared.DTOs
+@inject HttpClient Http
+
+<PageTitle>Dashboard - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Dashboard</h1>
+            <p class="text-gray-400">Overview of your sync operations</p>
+        </div>
+        <button class="btn-primary flex items-center space-x-2">
+            <span>➕</span>
+            <span>Add Project</span>
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Total Projects</p>
+                    <p class="text-3xl font-bold">@(overview?.TotalProjects ?? 0)</p>
+                </div>
+                <div class="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center text-2xl">
+                    📁
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Synced</p>
+                    <p class="text-3xl font-bold text-green-500">@(overview?.SyncedProjects ?? 0)</p>
+                </div>
+                <div class="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center text-2xl">
+                    ✅
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Pending</p>
+                    <p class="text-3xl font-bold text-yellow-500">@(overview?.PendingProjects ?? 0)</p>
+                </div>
+                <div class="w-12 h-12 rounded-lg bg-yellow-500/20 flex items-center justify-center text-2xl">
+                    ⏳
+                </div>
+            </div>
+        </div>
+
+        <div class="card p-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-gray-400 text-sm">Failed</p>
+                    <p class="text-3xl font-bold text-red-500">@(overview?.FailedProjects ?? 0)</p>
+                </div>
+                <div class="w-12 h-12 rounded-lg bg-red-500/20 flex items-center justify-center text-2xl">
+                    ❌
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Projects List -->
+        <div class="lg:col-span-2 card">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-lg font-semibold">Recent Projects</h2>
+            </div>
+            <div class="divide-y divide-gray-700">
+                @if (overview?.RecentProjects != null)
+                {
+                    @foreach (var project in overview.RecentProjects)
+                    {
+                        <div class="p-4 hover:bg-gray-700/50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center">
+                                        📦
+                                    </div>
+                                    <div>
+                                        <h3 class="font-medium">@project.Name</h3>
+                                        <p class="text-sm text-gray-400">@project.Framework • @project.LocalPath</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-4">
+                                    <div class="text-right">
+                                        <p class="text-sm @GetStatusClass(project.Status)">@project.Status</p>
+                                        <p class="text-xs text-gray-500">@project.LastSyncAgo</p>
+                                    </div>
+                                    <button class="btn-primary text-sm px-3 py-1">Sync</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="p-8 text-center text-gray-500">
+                        <p>No projects yet. Add your first project to get started!</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- System Health -->
+            <div class="card p-4">
+                <h2 class="text-lg font-semibold mb-4">System Health</h2>
+                @if (overview?.SystemHealth != null)
+                {
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Status</span>
+                            <span class="text-@(overview.SystemHealth.StatusColor)-500 font-medium">
+                                @overview.SystemHealth.Status
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Disk Usage</span>
+                            <span>@overview.SystemHealth.DiskUsage</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full"
+                                 style="width: @(overview.SystemHealth.DiskUsagePercent)%"></div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Uptime</span>
+                            <span>@overview.SystemHealth.Uptime</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- AI Status -->
+            <div class="card p-4">
+                <h2 class="text-lg font-semibold mb-4">AI Assistant</h2>
+                @if (overview?.AiStatus != null)
+                {
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Status</span>
+                            <span class="@(overview.AiStatus.Enabled ? "text-green-500" : "text-gray-500")">
+                                @(overview.AiStatus.Enabled ? "Enabled" : "Disabled")
+                            </span>
+                        </div>
+                        @if (overview.AiStatus.Enabled)
+                        {
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">Provider</span>
+                                <span>@overview.AiStatus.Provider</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">GPU</span>
+                                <span>@(overview.AiStatus.HasGpu ? "Available" : "CPU Only")</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- License -->
+            <div class="card p-4">
+                <h2 class="text-lg font-semibold mb-4">License</h2>
+                @if (overview?.License != null)
+                {
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Type</span>
+                            <span class="px-2 py-0.5 rounded text-sm bg-@(overview.License.TypeColor)-500/20 text-@(overview.License.TypeColor)-400">
+                                @overview.License.Type
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Projects</span>
+                            <span>@overview.License.ProjectsUsed / @overview.License.ProjectsLimit</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400">Users</span>
+                            <span>@overview.License.UsersUsed / @overview.License.UsersLimit</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card">
+        <div class="p-4 border-b border-gray-700">
+            <h2 class="text-lg font-semibold">Recent Activity</h2>
+        </div>
+        <div class="divide-y divide-gray-700">
+            @if (overview?.RecentActivity != null)
+            {
+                @foreach (var activity in overview.RecentActivity)
+                {
+                    <div class="p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-full bg-@(activity.TypeColor)-500/20 flex items-center justify-center">
+                            @activity.TypeIcon
+                        </div>
+                        <div class="flex-1">
+                            <p class="font-medium">@activity.Title</p>
+                            <p class="text-sm text-gray-400">@activity.ProjectName • @activity.Description</p>
+                        </div>
+                        <div class="text-sm text-gray-500">
+                            @activity.TimeAgo
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private DashboardOverviewDto? overview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // TODO: Fetch from API
+        // overview = await Http.GetFromJsonAsync<ApiResponse<DashboardOverviewDto>>("api/v1/dashboard/overview");
+
+        // Mock data for now
+        overview = new DashboardOverviewDto
+        {
+            TotalProjects = 5,
+            SyncedProjects = 3,
+            PendingProjects = 1,
+            FailedProjects = 1,
+            SystemHealth = new SystemHealthDto
+            {
+                Status = "healthy",
+                StatusColor = "green",
+                DiskUsage = "45.2 GB / 100 GB",
+                DiskUsagePercent = 45,
+                Uptime = "5 days"
+            },
+            AiStatus = new AiStatusDto
+            {
+                Enabled = true,
+                Provider = "Ollama",
+                HasGpu = false
+            },
+            License = new LicenseInfoDto
+            {
+                Type = "Community",
+                TypeColor = "gray",
+                ProjectsUsed = 2,
+                ProjectsLimit = 3,
+                UsersUsed = 1,
+                UsersLimit = 1
+            }
+        };
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Synced" => "text-green-500",
+        "Pending" or "Syncing" => "text-yellow-500",
+        "Failed" => "text-red-500",
+        _ => "text-gray-500"
+    };
+}

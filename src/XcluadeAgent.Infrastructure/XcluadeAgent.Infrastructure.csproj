@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>XcluadeAgent.Infrastructure</RootNamespace>
+    <Company>xman studio</Company>
+    <Product>XcluadeAgent</Product>
+    <Authors>xman studio</Authors>
+    <Description>Infrastructure services for XcluadeAgent</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XcluadeAgent.Core\XcluadeAgent.Core.csproj" />
+    <ProjectReference Include="..\XcluadeAgent.Shared\XcluadeAgent.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- HTTP & API -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageReference Include="Octokit" Version="13.0.1" />
+
+    <!-- Database -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <!-- Caching -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" />
+
+    <!-- Compression -->
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+
+    <!-- YAML -->
+    <PackageReference Include="YamlDotNet" Version="16.2.0" />
+
+    <!-- Logging -->
+    <PackageReference Include="Serilog" Version="4.1.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+
+    <!-- Security -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
+
+    <!-- Notifications -->
+    <PackageReference Include="MailKit" Version="4.8.0" />
+  </ItemGroup>
+
+</Project>
