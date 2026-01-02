@@ -28,6 +28,11 @@
     <ProjectReference Include="..\..\src\XcluadeAgent.Core\XcluadeAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\XcluadeAgent.Shared\XcluadeAgent.Shared.csproj" />
     <ProjectReference Include="..\..\src\XcluadeAgent.Infrastructure\XcluadeAgent.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\XcluadeAgent.Api\XcluadeAgent.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>
