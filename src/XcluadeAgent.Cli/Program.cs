@@ -6,20 +6,19 @@ using XcluadeAgent.Shared.DTOs;
 // XcluadeAgent CLI - syncctl
 // Developed by xman studio | https://xman4289.com
 
-var rootCommand = new RootCommand("XcluadeAgent CLI - GitHub Sync Service Controller")
-{
-    Name = "syncctl"
-};
+var rootCommand = new RootCommand("XcluadeAgent CLI - GitHub Sync Service Controller");
 
 // Configuration
 var apiUrlOption = new Option<string>(
-    aliases: ["--api", "-a"],
-    getDefaultValue: () => "http://localhost:5000",
+    name: "--api",
     description: "API URL");
+apiUrlOption.AddAlias("-a");
+apiUrlOption.SetDefaultValue("http://localhost:5000");
 
 var tokenOption = new Option<string?>(
-    aliases: ["--token", "-t"],
+    name: "--token",
     description: "JWT authentication token");
+tokenOption.AddAlias("-t");
 
 rootCommand.AddGlobalOption(apiUrlOption);
 rootCommand.AddGlobalOption(tokenOption);

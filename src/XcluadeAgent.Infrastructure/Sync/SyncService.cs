@@ -221,7 +221,7 @@ public class SyncService : ISyncService
                     var errorContext = new ErrorContext
                     {
                         ProjectName = project.Name,
-                        Framework = project.Framework.ToString(),
+                        Framework = project.Framework,
                         ErrorMessage = ex.Message,
                         StackTrace = ex.StackTrace
                     };

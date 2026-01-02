@@ -284,8 +284,14 @@ public class ConflictResolver : IConflictResolver
 
         try
         {
-            var response = await _aiService.AnalyzeErrorAsync(prompt, conflict.AffectedItems.FirstOrDefault() ?? "", cancellationToken);
-            return response ?? "AI analysis not available. Please review manually.";
+            var context = new ErrorContext
+            {
+                ProjectName = conflict.Title,
+                ErrorMessage = prompt,
+                Framework = FrameworkType.Unknown
+            };
+            var response = await _aiService.AnalyzeErrorAsync(context, cancellationToken);
+            return response.Summary ?? response.Explanation ?? "AI analysis not available. Please review manually.";
         }
         catch
         {

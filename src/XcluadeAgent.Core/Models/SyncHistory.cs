@@ -22,9 +22,24 @@ public class SyncHistory
     public string? InitiatedBy { get; set; }
 
     /// <summary>
-    /// Version/release synced to
+    /// Version/release synced to (alias for ToVersion)
     /// </summary>
     public string? Version { get; set; }
+
+    /// <summary>
+    /// Version before sync
+    /// </summary>
+    public string? FromVersion { get; set; }
+
+    /// <summary>
+    /// Version after sync
+    /// </summary>
+    public string? ToVersion { get; set; }
+
+    /// <summary>
+    /// Error message if sync failed
+    /// </summary>
+    public string? ErrorMessage { get; set; }
 
     /// <summary>
     /// Release information
