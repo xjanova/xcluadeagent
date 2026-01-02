@@ -92,8 +92,8 @@ public class SyncService : ISyncService
             }
 
             // Preserve original permissions
-            var originalOwnership = await _permissionManager.GetOwnershipAsync(project.LocalPath, cancellationToken);
-            _logger.LogDebug("Original ownership: {Owner}:{Group}", originalOwnership.Owner, originalOwnership.Group);
+            var originalOwnership = await _permissionManager.GetOwnershipAsync(project.LocalPath);
+            _logger.LogDebug("Original ownership: {Owner}:{Group}", originalOwnership.user, originalOwnership.group);
 
             // Create backup if enabled
             if (project.Config.Backup?.Enabled == true)
@@ -140,7 +140,7 @@ public class SyncService : ISyncService
             }
 
             // Restore original ownership
-            await _permissionManager.SetOwnershipAsync(project.LocalPath, originalOwnership.Owner, originalOwnership.Group, true, cancellationToken);
+            await _permissionManager.SetOwnershipAsync(project.LocalPath, originalOwnership.user, originalOwnership.group, true);
 
             // Run post-sync commands
             if (project.Config.PostSyncCommands?.Any() == true)
@@ -519,7 +519,7 @@ public class SyncService : ISyncService
     private async Task RollbackFromBackupAsync(Project project, string backupPath, CancellationToken cancellationToken)
     {
         // Preserve original permissions
-        var ownership = await _permissionManager.GetOwnershipAsync(project.LocalPath, cancellationToken);
+        var ownership = await _permissionManager.GetOwnershipAsync(project.LocalPath);
 
         // Clear target directory (except excluded paths)
         var excludePaths = project.Config.ExcludePaths ?? [];
@@ -539,7 +539,7 @@ public class SyncService : ISyncService
         }, cancellationToken);
 
         // Restore permissions
-        await _permissionManager.SetOwnershipAsync(project.LocalPath, ownership.Owner, ownership.Group, true, cancellationToken);
+        await _permissionManager.SetOwnershipAsync(project.LocalPath, ownership.user, ownership.group, true);
     }
 
     private async Task<int> ExtractAndSyncFilesAsync(string zipPath, string destinationPath, List<string>? excludePaths, CancellationToken cancellationToken)
