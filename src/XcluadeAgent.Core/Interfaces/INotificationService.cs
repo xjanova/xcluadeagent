@@ -168,4 +168,51 @@ public static class NotificationTemplates
         Details = error,
         ProjectName = projectName
     };
+
+    public static Notification SyncSuccess(string projectName, string version, int filesChanged) => new()
+    {
+        Type = NotificationType.SyncCompleted,
+        Priority = NotificationPriority.Normal,
+        Title = $"✅ Sync Successful: {projectName}",
+        Message = $"Successfully synced to version {version}",
+        Details = $"Files changed: {filesChanged}",
+        ProjectName = projectName
+    };
+
+    public static Notification NewVersionAvailable(string projectName, string currentVersion, string newVersion) => new()
+    {
+        Type = NotificationType.Info,
+        Priority = NotificationPriority.Normal,
+        Title = $"📦 New Version Available: {projectName}",
+        Message = $"Version {newVersion} is available (current: {currentVersion})",
+        ActionText = "Sync Now",
+        ProjectName = projectName
+    };
+
+    public static Notification SyncStarted(string projectName, string version) => new()
+    {
+        Type = NotificationType.SyncStarted,
+        Priority = NotificationPriority.Low,
+        Title = $"🔄 Sync Started: {projectName}",
+        Message = $"Syncing to version {version}",
+        ProjectName = projectName
+    };
+
+    public static Notification LicenseExpiring(int daysRemaining) => new()
+    {
+        Type = NotificationType.LicenseExpiring,
+        Priority = NotificationPriority.High,
+        Title = "⚠️ License Expiring Soon",
+        Message = $"Your license will expire in {daysRemaining} days",
+        ActionText = "Renew License"
+    };
+
+    public static Notification SecurityAlert(string projectName, string message) => new()
+    {
+        Type = NotificationType.SecurityAlert,
+        Priority = NotificationPriority.Critical,
+        Title = $"🔒 Security Alert: {projectName}",
+        Message = message,
+        ProjectName = projectName
+    };
 }

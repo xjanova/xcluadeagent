@@ -11,6 +11,8 @@ using XcluadeAgent.Infrastructure.GitHub;
 using XcluadeAgent.Infrastructure.License;
 using XcluadeAgent.Infrastructure.Notifications;
 using XcluadeAgent.Infrastructure.Persistence;
+using XcluadeAgent.Infrastructure.Scanner;
+using XcluadeAgent.Infrastructure.Sync;
 using XcluadeAgent.Api.Hubs;
 using XcluadeAgent.Shared.Constants;
 
@@ -84,6 +86,15 @@ builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
+builder.Services.AddScoped<ISyncService, SyncService>();
+
+// Scanner services
+builder.Services.AddScoped<ISystemScanner, SystemScanner>();
+builder.Services.AddScoped<IWebServerDetector, WebServerDetector>();
+builder.Services.AddScoped<IWebsiteDiscovery, WebsiteDiscovery>();
+builder.Services.AddScoped<IPermissionManager, PermissionManager>();
+builder.Services.AddScoped<IConflictResolver, ConflictResolver>();
+builder.Services.AddScoped<IEnvironmentAnalyzer, EnvironmentAnalyzer>();
 
 // Repositories
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();

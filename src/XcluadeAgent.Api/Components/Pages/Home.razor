@@ -224,43 +224,113 @@
 
 @code {
     private DashboardOverviewDto? overview;
+    private bool loading = true;
+    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        // TODO: Fetch from API
-        // overview = await Http.GetFromJsonAsync<ApiResponse<DashboardOverviewDto>>("api/v1/dashboard/overview");
+        await LoadDashboardDataAsync();
+    }
 
-        // Mock data for now
-        overview = new DashboardOverviewDto
+    private async Task LoadDashboardDataAsync()
+    {
+        try
         {
-            TotalProjects = 5,
-            SyncedProjects = 3,
-            PendingProjects = 1,
-            FailedProjects = 1,
-            SystemHealth = new SystemHealthDto
+            loading = true;
+            errorMessage = null;
+
+            var response = await Http.GetFromJsonAsync<ApiResponse<DashboardOverviewDto>>("api/v1/dashboard/overview");
+
+            if (response?.Success == true && response.Data != null)
             {
-                Status = "healthy",
-                StatusColor = "green",
-                DiskUsage = "45.2 GB / 100 GB",
-                DiskUsagePercent = 45,
-                Uptime = "5 days"
-            },
-            AiStatus = new AiStatusDto
-            {
-                Enabled = true,
-                Provider = "Ollama",
-                HasGpu = false
-            },
-            License = new LicenseInfoDto
-            {
-                Type = "Community",
-                TypeColor = "gray",
-                ProjectsUsed = 2,
-                ProjectsLimit = 3,
-                UsersUsed = 1,
-                UsersLimit = 1
+                overview = response.Data;
             }
-        };
+            else
+            {
+                // Fallback to empty state if API returns error
+                overview = new DashboardOverviewDto
+                {
+                    TotalProjects = 0,
+                    SyncedProjects = 0,
+                    PendingProjects = 0,
+                    FailedProjects = 0,
+                    SystemHealth = new SystemHealthDto
+                    {
+                        Status = "Unknown",
+                        StatusColor = "gray",
+                        DiskUsage = "N/A",
+                        DiskUsagePercent = 0,
+                        Uptime = "N/A"
+                    },
+                    AiStatus = new AiStatusDto
+                    {
+                        Enabled = false,
+                        Provider = "None",
+                        HasGpu = false
+                    },
+                    License = new LicenseInfoDto
+                    {
+                        Type = "Community",
+                        TypeColor = "gray",
+                        ProjectsUsed = 0,
+                        ProjectsLimit = 3,
+                        UsersUsed = 1,
+                        UsersLimit = 1
+                    }
+                };
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Failed to load dashboard: {ex.Message}";
+            overview = CreateEmptyOverview();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unexpected error: {ex.Message}";
+            overview = CreateEmptyOverview();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static DashboardOverviewDto CreateEmptyOverview() => new()
+    {
+        TotalProjects = 0,
+        SyncedProjects = 0,
+        PendingProjects = 0,
+        FailedProjects = 0,
+        SystemHealth = new SystemHealthDto
+        {
+            Status = "Offline",
+            StatusColor = "red",
+            DiskUsage = "N/A",
+            DiskUsagePercent = 0,
+            Uptime = "N/A"
+        },
+        AiStatus = new AiStatusDto
+        {
+            Enabled = false,
+            Provider = "None",
+            HasGpu = false
+        },
+        License = new LicenseInfoDto
+        {
+            Type = "Unknown",
+            TypeColor = "gray",
+            ProjectsUsed = 0,
+            ProjectsLimit = 0,
+            UsersUsed = 0,
+            UsersLimit = 0
+        }
+    };
+
+    private async Task RefreshDashboard()
+    {
+        await LoadDashboardDataAsync();
+        StateHasChanged();
     }
 
     private string GetStatusClass(string status) => status switch

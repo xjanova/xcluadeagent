@@ -23,6 +23,11 @@ public class AppConfig
     public DatabaseConfig Database { get; set; } = new();
 
     /// <summary>
+    /// Data path for storing files
+    /// </summary>
+    public string DataPath { get; set; } = "data";
+
+    /// <summary>
     /// GitHub settings
     /// </summary>
     public GitHubConfig GitHub { get; set; } = new();
@@ -45,7 +50,7 @@ public class AppConfig
     /// <summary>
     /// Backup settings
     /// </summary>
-    public BackupConfig Backup { get; set; } = new();
+    public GlobalBackupConfig Backup { get; set; } = new();
 
     /// <summary>
     /// License settings
@@ -275,9 +280,9 @@ public class SecurityConfig
 }
 
 /// <summary>
-/// Backup configuration
+/// Global backup configuration
 /// </summary>
-public class BackupConfig
+public class GlobalBackupConfig
 {
     public string BasePath { get; set; } = "data/backups";
     public int DefaultMaxBackups { get; set; } = 5;

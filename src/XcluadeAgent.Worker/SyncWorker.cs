@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.SignalR;
 using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
+using XcluadeAgent.Core.Models;
 
 namespace XcluadeAgent.Worker;
 
@@ -21,6 +23,9 @@ public class SyncWorker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("XcluadeAgent Sync Worker starting...");
+
+        // Initial delay to let services start up
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -44,6 +49,8 @@ public class SyncWorker : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var projectRepository = scope.ServiceProvider.GetRequiredService<IProjectRepository>();
         var gitHubService = scope.ServiceProvider.GetRequiredService<IGitHubService>();
+        var syncService = scope.ServiceProvider.GetRequiredService<ISyncService>();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
         var projects = await projectRepository.GetEnabledAsync(cancellationToken);
 
@@ -65,14 +72,47 @@ public class SyncWorker : BackgroundService
                 if (project.LastSyncedVersion != latestRelease.TagName)
                 {
                     _logger.LogInformation(
-                        "New version available for {Project}: {Version}",
+                        "New version available for {Project}: {CurrentVersion} -> {NewVersion}",
                         project.Name,
+                        project.LastSyncedVersion ?? "none",
                         latestRelease.TagName);
 
-                    project.Status = ProjectStatus.Pending;
-                    await projectRepository.UpdateAsync(project, cancellationToken);
+                    // Check if auto-sync is enabled
+                    if (project.Config.AutoSync)
+                    {
+                        _logger.LogInformation("Auto-syncing project {Project} to version {Version}",
+                            project.Name, latestRelease.TagName);
 
-                    // TODO: Trigger sync or notify based on configuration
+                        var result = await syncService.SyncAsync(
+                            project.Id,
+                            SyncTrigger.Scheduled,
+                            "sync-worker",
+                            cancellationToken);
+
+                        if (result.Success)
+                        {
+                            _logger.LogInformation("Successfully synced {Project} to {Version}",
+                                project.Name, latestRelease.TagName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Sync failed for {Project}: {Error}",
+                                project.Name, result.ErrorMessage);
+                        }
+                    }
+                    else
+                    {
+                        // Just mark as pending and notify
+                        project.Status = ProjectStatus.Pending;
+                        await projectRepository.UpdateAsync(project, cancellationToken);
+
+                        await notificationService.SendAsync(
+                            NotificationTemplates.NewVersionAvailable(
+                                project.Name,
+                                project.LastSyncedVersion ?? "none",
+                                latestRelease.TagName),
+                            cancellationToken);
+                    }
                 }
             }
             catch (Exception ex)

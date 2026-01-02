@@ -89,18 +89,22 @@ public class AiService : IAiService
         {
             var prompt = BuildAnalysisPrompt(context);
             var response = await SendPromptAsync(prompt, cancellationToken);
+            var parsed = ParseAnalysisResponse(response.Content);
+            var cost = CalculateCost(response.Provider, response.TokensUsed);
+
+            TrackUsage(response.Provider, response.TokensUsed, cost);
 
             return new AiErrorAnalysis
             {
                 Success = true,
                 Provider = response.Provider,
-                Summary = response.Summary,
-                RootCause = response.RootCause,
-                Explanation = response.Explanation,
-                PossibleSolutions = response.Solutions,
-                RecommendedAction = response.RecommendedAction,
+                Summary = parsed.Summary,
+                RootCause = parsed.RootCause,
+                Explanation = parsed.Explanation,
+                PossibleSolutions = parsed.Solutions,
+                RecommendedAction = parsed.RecommendedAction,
                 TokensUsed = response.TokensUsed,
-                EstimatedCost = CalculateCost(response.Provider, response.TokensUsed)
+                EstimatedCost = cost
             };
         }
         catch (Exception ex)
@@ -112,6 +116,95 @@ public class AiService : IAiService
                 ErrorMessage = ex.Message
             };
         }
+    }
+
+    private static ParsedAnalysis ParseAnalysisResponse(string content)
+    {
+        var result = new ParsedAnalysis();
+        var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var currentSection = "";
+        var solutionsList = new List<string>();
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+
+            if (trimmedLine.StartsWith("1.") || trimmedLine.Contains("Summary", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "summary";
+                var value = ExtractValue(trimmedLine);
+                if (!string.IsNullOrEmpty(value)) result.Summary = value;
+            }
+            else if (trimmedLine.StartsWith("2.") || trimmedLine.Contains("Root Cause", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "rootcause";
+                var value = ExtractValue(trimmedLine);
+                if (!string.IsNullOrEmpty(value)) result.RootCause = value;
+            }
+            else if (trimmedLine.StartsWith("3.") || trimmedLine.Contains("Explanation", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "explanation";
+                var value = ExtractValue(trimmedLine);
+                if (!string.IsNullOrEmpty(value)) result.Explanation = value;
+            }
+            else if (trimmedLine.StartsWith("4.") || trimmedLine.Contains("Solution", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "solutions";
+            }
+            else if (trimmedLine.StartsWith("5.") || trimmedLine.Contains("Recommend", StringComparison.OrdinalIgnoreCase))
+            {
+                currentSection = "recommended";
+                var value = ExtractValue(trimmedLine);
+                if (!string.IsNullOrEmpty(value)) result.RecommendedAction = value;
+            }
+            else if (currentSection == "solutions" && (trimmedLine.StartsWith("-") || trimmedLine.StartsWith("•")))
+            {
+                solutionsList.Add(trimmedLine.TrimStart('-', '•', ' '));
+            }
+            else if (!string.IsNullOrEmpty(currentSection) && !string.IsNullOrWhiteSpace(trimmedLine))
+            {
+                switch (currentSection)
+                {
+                    case "summary" when string.IsNullOrEmpty(result.Summary):
+                        result.Summary = trimmedLine;
+                        break;
+                    case "rootcause" when string.IsNullOrEmpty(result.RootCause):
+                        result.RootCause = trimmedLine;
+                        break;
+                    case "explanation" when string.IsNullOrEmpty(result.Explanation):
+                        result.Explanation = trimmedLine;
+                        break;
+                    case "recommended" when string.IsNullOrEmpty(result.RecommendedAction):
+                        result.RecommendedAction = trimmedLine;
+                        break;
+                }
+            }
+        }
+
+        result.Solutions = solutionsList.Count > 0 ? solutionsList : ["Review the error details and logs for more context"];
+
+        // Fallback values
+        result.Summary ??= content.Length > 200 ? content[..200] + "..." : content;
+        result.RootCause ??= "Unable to determine specific root cause";
+        result.Explanation ??= "See the full AI response for details";
+        result.RecommendedAction ??= "Review the suggested solutions";
+
+        return result;
+    }
+
+    private static string ExtractValue(string line)
+    {
+        var colonIndex = line.IndexOf(':');
+        return colonIndex > 0 ? line[(colonIndex + 1)..].Trim() : "";
+    }
+
+    private class ParsedAnalysis
+    {
+        public string? Summary { get; set; }
+        public string? RootCause { get; set; }
+        public string? Explanation { get; set; }
+        public List<string> Solutions { get; set; } = [];
+        public string? RecommendedAction { get; set; }
     }
 
     public async Task<AiFixSuggestion> SuggestFixAsync(ErrorContext context, CancellationToken cancellationToken = default)
@@ -179,6 +272,7 @@ public class AiService : IAiService
     {
         if (requireApproval && _config.Safety.RequireApproval)
         {
+            _logger.LogInformation("Patch requires approval, creating approval request");
             return new ApplyPatchResult
             {
                 Success = true,
@@ -187,19 +281,171 @@ public class AiService : IAiService
             };
         }
 
-        // TODO: Implement actual patch application
-        throw new NotImplementedException("Patch application will be implemented in the sync service");
+        var result = new ApplyPatchResult();
+        var appliedFiles = new List<string>();
+
+        try
+        {
+            // Run pre-commands
+            foreach (var command in patch.PreCommands)
+            {
+                _logger.LogDebug("Running pre-command: {Command}", command);
+                await RunCommandAsync(command, cancellationToken);
+            }
+
+            // Apply file patches
+            foreach (var filePatch in patch.Patches)
+            {
+                try
+                {
+                    if (filePatch.IsDeleted && File.Exists(filePatch.FilePath))
+                    {
+                        File.Delete(filePatch.FilePath);
+                        _logger.LogInformation("Deleted file: {Path}", filePatch.FilePath);
+                    }
+                    else if (!string.IsNullOrEmpty(filePatch.NewContent))
+                    {
+                        var directory = Path.GetDirectoryName(filePatch.FilePath);
+                        if (!string.IsNullOrEmpty(directory))
+                        {
+                            Directory.CreateDirectory(directory);
+                        }
+
+                        await File.WriteAllTextAsync(filePatch.FilePath, filePatch.NewContent, cancellationToken);
+                        _logger.LogInformation("Applied patch to: {Path}", filePatch.FilePath);
+                    }
+
+                    appliedFiles.Add(filePatch.FilePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to apply patch to {Path}", filePatch.FilePath);
+                    throw;
+                }
+            }
+
+            // Run post-commands
+            foreach (var command in patch.PostCommands)
+            {
+                _logger.LogDebug("Running post-command: {Command}", command);
+                await RunCommandAsync(command, cancellationToken);
+            }
+
+            result.Success = true;
+            result.AppliedFiles = appliedFiles;
+            result.AppliedToProduction = true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to apply patch");
+            result.Success = false;
+            result.ErrorMessage = ex.Message;
+
+            // Attempt to rollback applied changes
+            foreach (var filePatch in patch.Patches.Where(p => appliedFiles.Contains(p.FilePath)))
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(filePatch.OriginalContent))
+                    {
+                        await File.WriteAllTextAsync(filePatch.FilePath, filePatch.OriginalContent, cancellationToken);
+                    }
+                }
+                catch
+                {
+                    // Best effort rollback
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private async Task RunCommandAsync(string command, CancellationToken cancellationToken)
+    {
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments = $"-c \"{command.Replace("\"", "\\\"")}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+
+        process.Start();
+        await process.WaitForExitAsync(cancellationToken);
+
+        if (process.ExitCode != 0)
+        {
+            var error = await process.StandardError.ReadToEndAsync(cancellationToken);
+            throw new InvalidOperationException($"Command failed: {error}");
+        }
     }
 
     public async Task<AiUsageStats> GetUsageStatsAsync(DateTime? from = null, DateTime? to = null, CancellationToken cancellationToken = default)
     {
-        // TODO: Implement usage tracking from database
-        return new AiUsageStats
+        // For now, read from in-memory tracking; in production, this would come from database
+        var stats = new AiUsageStats
         {
-            BudgetUsd = _config.CostControl.MonthlyBudgetUsd,
-            BudgetRemainingUsd = _config.CostControl.MonthlyBudgetUsd,
-            BudgetUsedPercent = 0
+            BudgetUsd = _config.CostControl?.MonthlyBudgetUsd ?? 100m,
+            TotalRequests = _usageTracking.TotalRequests,
+            TotalTokensUsed = _usageTracking.TotalTokens,
+            TotalCostUsd = _usageTracking.TotalCost
         };
+
+        stats.BudgetRemainingUsd = Math.Max(0, stats.BudgetUsd - stats.TotalCostUsd);
+        stats.BudgetUsedPercent = stats.BudgetUsd > 0
+            ? (int)((stats.TotalCostUsd / stats.BudgetUsd) * 100)
+            : 0;
+
+        stats.ByProvider = _usageTracking.ByProvider.ToDictionary(
+            kvp => kvp.Key,
+            kvp => new ProviderUsage
+            {
+                Requests = kvp.Value.Requests,
+                TokensUsed = kvp.Value.Tokens,
+                CostUsd = kvp.Value.Cost
+            });
+
+        return await Task.FromResult(stats);
+    }
+
+    private void TrackUsage(AiProvider provider, int tokens, decimal cost)
+    {
+        _usageTracking.TotalRequests++;
+        _usageTracking.TotalTokens += tokens;
+        _usageTracking.TotalCost += cost;
+
+        if (!_usageTracking.ByProvider.TryGetValue(provider, out var providerStats))
+        {
+            providerStats = new UsageData();
+            _usageTracking.ByProvider[provider] = providerStats;
+        }
+
+        providerStats.Requests++;
+        providerStats.Tokens += tokens;
+        providerStats.Cost += cost;
+    }
+
+    private static readonly UsageTracking _usageTracking = new();
+
+    private class UsageTracking
+    {
+        public int TotalRequests { get; set; }
+        public int TotalTokens { get; set; }
+        public decimal TotalCost { get; set; }
+        public Dictionary<AiProvider, UsageData> ByProvider { get; } = new();
+    }
+
+    private class UsageData
+    {
+        public int Requests { get; set; }
+        public int Tokens { get; set; }
+        public decimal Cost { get; set; }
     }
 
     public AiModeInfo GetModeInfo(AiMode mode)

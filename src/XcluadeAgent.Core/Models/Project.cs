@@ -52,7 +52,7 @@ public class Project
     /// <summary>
     /// Last sync timestamp
     /// </summary>
-    public DateTime? LastSyncAt { get; set; }
+    public DateTime? LastSyncedAt { get; set; }
 
     /// <summary>
     /// Last synced release/commit
@@ -111,14 +111,14 @@ public class Project
 public class ProjectConfig
 {
     /// <summary>
-    /// Create backup before sync
+    /// Auto-sync when new release is available
     /// </summary>
-    public bool BackupBeforeSync { get; set; } = true;
+    public bool AutoSync { get; set; } = false;
 
     /// <summary>
-    /// Maximum number of backups to keep
+    /// Backup configuration
     /// </summary>
-    public int MaxBackups { get; set; } = 5;
+    public ProjectBackupConfig? Backup { get; set; }
 
     /// <summary>
     /// Auto-rollback on error
@@ -133,17 +133,22 @@ public class ProjectConfig
     /// <summary>
     /// Files/folders to exclude from sync
     /// </summary>
-    public List<string> ExcludePatterns { get; set; } = [".env", ".env.*", "storage/", "node_modules/", ".git/"];
+    public List<string>? ExcludePaths { get; set; } = [".env", ".env.*", "storage/", "node_modules/", ".git/"];
 
     /// <summary>
     /// Files/folders to include (if empty, include all)
     /// </summary>
-    public List<string> IncludePatterns { get; set; } = [];
+    public List<string>? IncludePaths { get; set; } = [];
 
     /// <summary>
-    /// Post-deploy commands to run
+    /// Commands to run before sync
     /// </summary>
-    public List<string> PostDeployCommands { get; set; } = [];
+    public List<string>? PreSyncCommands { get; set; } = [];
+
+    /// <summary>
+    /// Commands to run after sync
+    /// </summary>
+    public List<string>? PostSyncCommands { get; set; } = [];
 
     /// <summary>
     /// Use framework default commands
@@ -172,6 +177,16 @@ public class ProjectConfig
 }
 
 /// <summary>
+/// Project backup configuration
+/// </summary>
+public class ProjectBackupConfig
+{
+    public bool Enabled { get; set; } = true;
+    public string? Directory { get; set; }
+    public int RetentionCount { get; set; } = 5;
+}
+
+/// <summary>
 /// File permission settings
 /// </summary>
 public class FilePermissions
@@ -197,4 +212,5 @@ public class HealthCheckConfig
     public string? ExpectedContent { get; set; }
     public int RetryCount { get; set; } = 3;
     public int RetryDelaySeconds { get; set; } = 5;
+    public bool RollbackOnFail { get; set; } = true;
 }

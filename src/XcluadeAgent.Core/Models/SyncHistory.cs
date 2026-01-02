@@ -22,14 +22,14 @@ public class SyncHistory
     public string? InitiatedBy { get; set; }
 
     /// <summary>
-    /// Version/release/commit before sync
+    /// Version/release synced to
     /// </summary>
-    public string? FromVersion { get; set; }
+    public string? Version { get; set; }
 
     /// <summary>
-    /// Version/release/commit after sync
+    /// Release information
     /// </summary>
-    public string? ToVersion { get; set; }
+    public string? ReleaseInfo { get; set; }
 
     /// <summary>
     /// Sync started at
@@ -52,9 +52,14 @@ public class SyncHistory
     public bool Success { get; set; }
 
     /// <summary>
-    /// Error message if failed
+    /// Status message
     /// </summary>
-    public string? ErrorMessage { get; set; }
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// Error details if failed
+    /// </summary>
+    public string? ErrorDetails { get; set; }
 
     /// <summary>
     /// Number of files synced
@@ -94,7 +99,7 @@ public class SyncHistory
     /// <summary>
     /// AI analysis if enabled
     /// </summary>
-    public AiAnalysis? AiAnalysis { get; set; }
+    public object? AiAnalysis { get; set; }
 }
 
 /// <summary>
@@ -105,9 +110,9 @@ public class CommandResult
     public string Command { get; set; } = string.Empty;
     public int ExitCode { get; set; }
     public string? Output { get; set; }
-    public string? Error { get; set; }
+    public string? ErrorOutput { get; set; }
     public long DurationMs { get; set; }
-    public bool Success => ExitCode == 0;
+    public bool Success { get; set; }
 }
 
 /// <summary>
@@ -116,8 +121,9 @@ public class CommandResult
 public class HealthCheckResult
 {
     public bool Success { get; set; }
-    public string Url { get; set; } = string.Empty;
-    public int StatusCode { get; set; }
+    public string? Url { get; set; }
+    public int ExpectedStatusCode { get; set; }
+    public int ActualStatusCode { get; set; }
     public long ResponseTimeMs { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTime CheckedAt { get; set; } = DateTime.UtcNow;
