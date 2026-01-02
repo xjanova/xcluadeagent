@@ -251,6 +251,7 @@ versionCommand.SetAction((parseResult, cancellationToken) =>
     AnsiConsole.Write(new FigletText("syncctl").Color(Color.Blue));
     AnsiConsole.MarkupLine("XcluadeAgent CLI v1.0.0");
     AnsiConsole.MarkupLine("[grey]Developed by xman studio | https://xman4289.com[/]");
+    return Task.CompletedTask;
 });
 rootCommand.Subcommands.Add(versionCommand);
 
