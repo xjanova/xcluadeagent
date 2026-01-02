@@ -1,3 +1,5 @@
+using XcluadeAgent.Core.Enums;
+
 namespace XcluadeAgent.Core.Models;
 
 /// <summary>
