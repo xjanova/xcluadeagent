@@ -7,8 +7,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
-using XcluadeAgent.Shared.Constants;
 using XcluadeAgent.Shared.DTOs;
+using CustomClaimTypes = XcluadeAgent.Shared.Constants.ClaimTypes;
 
 namespace XcluadeAgent.Api.Controllers;
 
@@ -162,7 +162,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<ApiResponse>> Logout()
     {
-        var userId = User.FindFirst(ClaimTypes.UserId)?.Value;
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
 
         if (userId != null && Guid.TryParse(userId, out var id))
         {
@@ -185,7 +185,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<ApiResponse<UserDto>>> GetCurrentUser()
     {
-        var userId = User.FindFirst(ClaimTypes.UserId)?.Value;
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
 
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var id))
         {
@@ -218,7 +218,7 @@ public class AuthController : ControllerBase
             return BadRequest(ApiResponse.Fail($"Password must be at least {AppConstants.Security.MinPasswordLength} characters"));
         }
 
-        var userId = User.FindFirst(ClaimTypes.UserId)?.Value;
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
         if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var id))
         {
             return Unauthorized();
@@ -256,11 +256,11 @@ public class AuthController : ControllerBase
     {
         var claims = new[]
         {
-            new Claim(ClaimTypes.UserId, user.Id.ToString()),
-            new Claim(ClaimTypes.Username, user.Username),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
-            new Claim(ClaimTypes.DisplayName, user.DisplayName ?? user.Username)
+            new Claim(CustomClaimTypes.UserId, user.Id.ToString()),
+            new Claim(CustomClaimTypes.Username, user.Username),
+            new Claim(CustomClaimTypes.Email, user.Email),
+            new Claim(CustomClaimTypes.Role, user.Role.ToString()),
+            new Claim(CustomClaimTypes.DisplayName, user.DisplayName ?? user.Username)
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_securityConfig.JwtSecret));

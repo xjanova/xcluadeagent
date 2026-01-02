@@ -113,7 +113,7 @@ public class ProjectsController : ControllerBase
         // Set default commands based on framework
         if (project.Config.UseDefaultCommands && project.Framework != FrameworkType.Unknown)
         {
-            project.Config.PostDeployCommands = project.Framework.GetDefaultPostDeployCommands().ToList();
+            project.Config.PostSyncCommands = project.Framework.GetDefaultPostDeployCommands().ToList();
         }
 
         // Generate webhook secret
@@ -285,7 +285,7 @@ public class ProjectsController : ControllerBase
         LocalPath = project.LocalPath,
         Status = project.Status.ToString(),
         StatusColor = GetStatusColor(project.Status),
-        LastSyncAt = project.LastSyncAt,
+        LastSyncAt = project.LastSyncedAt,
         LastSyncedVersion = project.LastSyncedVersion,
         LastError = project.LastError,
         Framework = project.Framework.GetDisplayName(),
@@ -317,13 +317,16 @@ public class ProjectsController : ControllerBase
 
     private static ProjectConfig MapFromConfigDto(ProjectConfigDto dto) => new()
     {
-        BackupBeforeSync = dto.BackupBeforeSync,
-        MaxBackups = dto.MaxBackups,
+        Backup = new ProjectBackupConfig
+        {
+            Enabled = dto.BackupBeforeSync,
+            RetentionCount = dto.MaxBackups
+        },
         AutoRollbackOnError = dto.AutoRollbackOnError,
         RollbackTimeoutSeconds = dto.RollbackTimeoutSeconds,
-        ExcludePatterns = dto.ExcludePatterns,
-        IncludePatterns = dto.IncludePatterns,
-        PostDeployCommands = dto.PostDeployCommands,
+        ExcludePaths = dto.ExcludePatterns,
+        IncludePaths = dto.IncludePatterns,
+        PostSyncCommands = dto.PostDeployCommands,
         UseDefaultCommands = dto.UseDefaultCommands,
         AiModeOverride = dto.AiModeOverride
     };
