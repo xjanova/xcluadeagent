@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Xunit;
 using XcluadeAgent.Core.Enums;
 
 namespace XcluadeAgent.Tests.Infrastructure;
