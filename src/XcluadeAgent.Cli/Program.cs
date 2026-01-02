@@ -9,16 +9,16 @@ using XcluadeAgent.Shared.DTOs;
 var rootCommand = new RootCommand("XcluadeAgent CLI - GitHub Sync Service Controller");
 
 // Configuration
-var apiUrlOption = new Option<string>(
-    aliases: ["--api", "-a"],
-    description: "API URL")
+var apiUrlOption = new Option<string>("--api", "-a")
 {
+    Description = "API URL",
     DefaultValueFactory = _ => "http://localhost:5000"
 };
 
-var tokenOption = new Option<string?>(
-    aliases: ["--token", "-t"],
-    description: "JWT authentication token");
+var tokenOption = new Option<string?>("--token", "-t")
+{
+    Description = "JWT authentication token"
+};
 
 rootCommand.Options.Add(apiUrlOption);
 rootCommand.Options.Add(tokenOption);
@@ -116,8 +116,8 @@ rootCommand.Subcommands.Add(listCommand);
 
 // Sync command
 var syncCommand = new Command("sync", "Sync a project");
-var projectArg = new Argument<string>("project", "Project name or ID");
-var dryRunOption = new Option<bool>("--dry-run", "Preview changes without applying");
+var projectArg = new Argument<string>("project") { Description = "Project name or ID" };
+var dryRunOption = new Option<bool>("--dry-run") { Description = "Preview changes without applying" };
 syncCommand.Arguments.Add(projectArg);
 syncCommand.Options.Add(dryRunOption);
 
@@ -166,9 +166,9 @@ rootCommand.Subcommands.Add(syncCommand);
 
 // Rollback command
 var rollbackCommand = new Command("rollback", "Rollback a project");
-var rollbackProjectArg = new Argument<string>("project", "Project name or ID");
+var rollbackProjectArg = new Argument<string>("project") { Description = "Project name or ID" };
 rollbackCommand.Arguments.Add(rollbackProjectArg);
-var versionOption = new Option<string?>("--version", "Version to rollback to");
+var versionOption = new Option<string?>("--version") { Description = "Version to rollback to" };
 rollbackCommand.Options.Add(versionOption);
 
 rollbackCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -254,7 +254,7 @@ versionCommand.SetAction((parseResult, cancellationToken) =>
 });
 rootCommand.Subcommands.Add(versionCommand);
 
-return await rootCommand.InvokeAsync(args);
+return await rootCommand.Parse(args).InvokeAsync();
 
 // Helper
 static HttpClient CreateClient(string apiUrl, string? token)
