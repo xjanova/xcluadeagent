@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Moq;
+using Xunit;
 using Microsoft.Extensions.Logging;
 using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
