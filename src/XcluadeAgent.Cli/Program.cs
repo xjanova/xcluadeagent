@@ -11,9 +11,9 @@ var rootCommand = new RootCommand("XcluadeAgent CLI - GitHub Sync Service Contro
 // Configuration
 var apiUrlOption = new Option<string>(
     name: "--api",
-    description: "API URL");
+    description: "API URL",
+    getDefaultValue: () => "http://localhost:5000");
 apiUrlOption.AddAlias("-a");
-apiUrlOption.SetDefaultValue("http://localhost:5000");
 
 var tokenOption = new Option<string?>(
     name: "--token",
@@ -25,8 +25,10 @@ rootCommand.AddGlobalOption(tokenOption);
 
 // Status command
 var statusCommand = new Command("status", "Show system status");
-statusCommand.SetHandler(async (string apiUrl, string? token) =>
+statusCommand.SetAction(async (parseResult, cancellationToken) =>
 {
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
     using var client = CreateClient(apiUrl, token);
 
     AnsiConsole.Write(new FigletText("XcluadeAgent").Color(Color.Blue));
@@ -38,7 +40,7 @@ statusCommand.SetHandler(async (string apiUrl, string? token) =>
         {
             try
             {
-                var health = await client.GetFromJsonAsync<dynamic>("health");
+                var health = await client.GetFromJsonAsync<dynamic>("health", cancellationToken);
                 var table = new Table();
                 table.AddColumn("Property");
                 table.AddColumn("Value");
@@ -54,13 +56,15 @@ statusCommand.SetHandler(async (string apiUrl, string? token) =>
                 AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
             }
         });
-}, apiUrlOption, tokenOption);
+});
 rootCommand.AddCommand(statusCommand);
 
 // List projects command
 var listCommand = new Command("list", "List all projects");
-listCommand.SetHandler(async (string apiUrl, string? token) =>
+listCommand.SetAction(async (parseResult, cancellationToken) =>
 {
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
     using var client = CreateClient(apiUrl, token);
 
     await AnsiConsole.Status()
@@ -68,7 +72,7 @@ listCommand.SetHandler(async (string apiUrl, string? token) =>
         {
             try
             {
-                var response = await client.GetFromJsonAsync<ApiResponse<List<ProjectDto>>>("api/v1/projects");
+                var response = await client.GetFromJsonAsync<ApiResponse<List<ProjectDto>>>("api/v1/projects", cancellationToken);
 
                 if (response?.Data == null || response.Data.Count == 0)
                 {
@@ -107,7 +111,7 @@ listCommand.SetHandler(async (string apiUrl, string? token) =>
                 AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
             }
         });
-}, apiUrlOption, tokenOption);
+});
 rootCommand.AddCommand(listCommand);
 
 // Sync command
@@ -117,8 +121,12 @@ var dryRunOption = new Option<bool>("--dry-run", "Preview changes without applyi
 syncCommand.AddArgument(projectArg);
 syncCommand.AddOption(dryRunOption);
 
-syncCommand.SetHandler(async (string project, bool dryRun, string apiUrl, string? token) =>
+syncCommand.SetAction(async (parseResult, cancellationToken) =>
 {
+    var project = parseResult.GetValue(projectArg)!;
+    var dryRun = parseResult.GetValue(dryRunOption);
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
     using var client = CreateClient(apiUrl, token);
 
     AnsiConsole.MarkupLine($"[blue]Syncing project: {project}[/]");
@@ -136,7 +144,7 @@ syncCommand.SetHandler(async (string project, bool dryRun, string apiUrl, string
             try
             {
                 var request = new { dryRun };
-                var response = await client.PostAsJsonAsync($"api/v1/projects/{project}/sync", request);
+                var response = await client.PostAsJsonAsync($"api/v1/projects/{project}/sync", request, cancellationToken);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -153,17 +161,22 @@ syncCommand.SetHandler(async (string project, bool dryRun, string apiUrl, string
                 AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
             }
         });
-}, projectArg, dryRunOption, apiUrlOption, tokenOption);
+});
 rootCommand.AddCommand(syncCommand);
 
 // Rollback command
 var rollbackCommand = new Command("rollback", "Rollback a project");
-rollbackCommand.AddArgument(projectArg);
+var rollbackProjectArg = new Argument<string>("project", "Project name or ID");
+rollbackCommand.AddArgument(rollbackProjectArg);
 var versionOption = new Option<string?>("--version", "Version to rollback to");
 rollbackCommand.AddOption(versionOption);
 
-rollbackCommand.SetHandler(async (string project, string? version, string apiUrl, string? token) =>
+rollbackCommand.SetAction(async (parseResult, cancellationToken) =>
 {
+    var project = parseResult.GetValue(rollbackProjectArg)!;
+    var version = parseResult.GetValue(versionOption);
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
     using var client = CreateClient(apiUrl, token);
 
     if (!AnsiConsole.Confirm($"Rollback project [yellow]{project}[/]?"))
@@ -176,7 +189,7 @@ rollbackCommand.SetHandler(async (string project, string? version, string apiUrl
     try
     {
         var request = new { toLastBackup = version == null };
-        var response = await client.PostAsJsonAsync($"api/v1/projects/{project}/rollback", request);
+        var response = await client.PostAsJsonAsync($"api/v1/projects/{project}/rollback", request, cancellationToken);
 
         if (response.IsSuccessStatusCode)
         {
@@ -191,13 +204,15 @@ rollbackCommand.SetHandler(async (string project, string? version, string apiUrl
     {
         AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
     }
-}, projectArg, versionOption, apiUrlOption, tokenOption);
+});
 rootCommand.AddCommand(rollbackCommand);
 
 // Login command
 var loginCommand = new Command("login", "Login to get authentication token");
-loginCommand.SetHandler(async (string apiUrl) =>
+loginCommand.SetAction(async (parseResult, cancellationToken) =>
 {
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+
     var username = AnsiConsole.Ask<string>("Username:");
     var password = AnsiConsole.Prompt(
         new TextPrompt<string>("Password:")
@@ -207,8 +222,8 @@ loginCommand.SetHandler(async (string apiUrl) =>
 
     try
     {
-        var response = await client.PostAsJsonAsync("api/v1/auth/login", new { username, password });
-        var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+        var response = await client.PostAsJsonAsync("api/v1/auth/login", new { username, password }, cancellationToken);
+        var result = await response.Content.ReadFromJsonAsync<LoginResponse>(cancellationToken);
 
         if (result?.Success == true)
         {
@@ -226,12 +241,12 @@ loginCommand.SetHandler(async (string apiUrl) =>
     {
         AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
     }
-}, apiUrlOption);
+});
 rootCommand.AddCommand(loginCommand);
 
 // Version command
 var versionCommand = new Command("version", "Show version information");
-versionCommand.SetHandler(() =>
+versionCommand.SetAction((parseResult, cancellationToken) =>
 {
     AnsiConsole.Write(new FigletText("syncctl").Color(Color.Blue));
     AnsiConsole.MarkupLine("XcluadeAgent CLI v1.0.0");
