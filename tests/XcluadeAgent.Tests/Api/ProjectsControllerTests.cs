@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Moq;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
