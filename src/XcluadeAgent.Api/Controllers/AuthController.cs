@@ -9,6 +9,7 @@ using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
 using XcluadeAgent.Shared.DTOs;
 using CustomClaimTypes = XcluadeAgent.Shared.Constants.ClaimTypes;
+using AppConstants = XcluadeAgent.Shared.Constants.AppConstants;
 
 namespace XcluadeAgent.Api.Controllers;
 
