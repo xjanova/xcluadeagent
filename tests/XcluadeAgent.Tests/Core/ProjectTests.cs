@@ -32,14 +32,13 @@ public class ProjectTests
         var config = new ProjectConfig();
 
         // Assert
-        config.BackupBeforeSync.Should().BeTrue();
-        config.MaxBackups.Should().Be(5);
+        config.Backup.Should().BeNull(); // Backup is optional and null by default
         config.AutoRollbackOnError.Should().BeTrue();
         config.RollbackTimeoutSeconds.Should().Be(60);
         config.UseDefaultCommands.Should().BeTrue();
-        config.ExcludePatterns.Should().Contain(".env");
-        config.ExcludePatterns.Should().Contain("node_modules/");
-        config.ExcludePatterns.Should().Contain(".git/");
+        config.ExcludePaths.Should().Contain(".env");
+        config.ExcludePaths.Should().Contain("node_modules/");
+        config.ExcludePaths.Should().Contain(".git/");
     }
 
     [Fact]

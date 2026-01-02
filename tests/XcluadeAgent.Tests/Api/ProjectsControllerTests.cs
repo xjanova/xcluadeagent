@@ -121,7 +121,7 @@ public class ProjectsControllerTests
         var project = CreateProject("test-project");
         project.Status = ProjectStatus.Synced;
         project.Framework = FrameworkType.Laravel;
-        project.LastSyncAt = DateTime.UtcNow;
+        project.LastSyncedAt = DateTime.UtcNow;
 
         // Act
         var dto = MapToDto(project);
@@ -236,7 +236,7 @@ public class ProjectsControllerTests
             Status = project.Status.ToString(),
             Framework = project.Framework.GetDisplayName(),
             Enabled = project.Enabled,
-            LastSyncAt = project.LastSyncAt,
+            LastSyncAt = project.LastSyncedAt,
             LastSyncedVersion = project.LastSyncedVersion
         };
     }
