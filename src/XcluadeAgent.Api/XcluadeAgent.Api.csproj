@@ -22,8 +22,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
 
     <!-- API Documentation -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
-    <PackageReference Include="Microsoft.OpenApi" Version="1.6.23" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
 
     <!-- Blazor -->
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.11" />
@@ -32,7 +31,7 @@
     <PackageReference Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
 
     <!-- Logging -->
-    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.0" />
   </ItemGroup>
 
 </Project>
