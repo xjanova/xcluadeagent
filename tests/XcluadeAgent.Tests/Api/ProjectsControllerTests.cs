@@ -76,7 +76,7 @@ public class ProjectsControllerTests
     public async Task CreateProject_Valid_ShouldReturnCreatedProject()
     {
         // Arrange
-        var dto = new CreateProjectDto
+        var request = new CreateProjectRequest
         {
             Name = "new-project",
             Repository = "owner/repo",
@@ -85,7 +85,7 @@ public class ProjectsControllerTests
         };
 
         // Act
-        var result = await CreateProjectAsync(dto);
+        var result = await CreateProjectAsync(request);
 
         // Assert
         result.Should().NotBeNull();
@@ -100,7 +100,7 @@ public class ProjectsControllerTests
     public void ValidateProject_InvalidData_ShouldReturnErrors(string name, string repo, string path)
     {
         // Arrange
-        var dto = new CreateProjectDto
+        var request = new CreateProjectRequest
         {
             Name = name,
             Repository = repo,
@@ -108,7 +108,7 @@ public class ProjectsControllerTests
         };
 
         // Act
-        var errors = ValidateCreateProject(dto);
+        var errors = ValidateCreateProject(request);
 
         // Assert
         errors.Should().NotBeEmpty();
@@ -129,7 +129,7 @@ public class ProjectsControllerTests
         // Assert
         dto.Name.Should().Be("test-project");
         dto.Status.Should().Be("Synced");
-        dto.Framework.Should().Be("Laravel");
+        dto.Framework.Should().Be("Laravel (PHP)");
         dto.LastSyncAt.Should().NotBeNull();
     }
 
@@ -140,8 +140,8 @@ public class ProjectsControllerTests
         var project = CreateProject("sync-project");
         project.Enabled = true;
         _projectRepoMock.Setup(r => r.GetByIdAsync(project.Id)).ReturnsAsync(project);
-        _syncServiceMock.Setup(s => s.SyncProjectAsync(project.Id, It.IsAny<SyncTrigger>()))
-            .ReturnsAsync(true);
+        _syncServiceMock.Setup(s => s.SyncAsync(project.Id, It.IsAny<SyncTrigger>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SyncResult { Success = true });
 
         // Act
         var result = await TriggerSyncAsync(project.Id);
@@ -194,15 +194,15 @@ public class ProjectsControllerTests
         return project != null ? MapToDto(project) : null;
     }
 
-    private Task<ProjectDto> CreateProjectAsync(CreateProjectDto dto)
+    private Task<ProjectDto> CreateProjectAsync(CreateProjectRequest request)
     {
         var project = new Project
         {
             Id = Guid.NewGuid(),
-            Name = dto.Name,
-            Repository = dto.Repository,
-            LocalPath = dto.LocalPath,
-            Branch = dto.Branch ?? "main",
+            Name = request.Name,
+            Repository = request.Repository,
+            LocalPath = request.LocalPath,
+            Branch = request.Branch,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -210,15 +210,15 @@ public class ProjectsControllerTests
         return Task.FromResult(MapToDto(project));
     }
 
-    private List<string> ValidateCreateProject(CreateProjectDto dto)
+    private List<string> ValidateCreateProject(CreateProjectRequest request)
     {
         var errors = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(dto.Name))
+        if (string.IsNullOrWhiteSpace(request.Name))
             errors.Add("Name is required");
-        if (string.IsNullOrWhiteSpace(dto.Repository))
+        if (string.IsNullOrWhiteSpace(request.Repository))
             errors.Add("Repository is required");
-        if (string.IsNullOrWhiteSpace(dto.LocalPath))
+        if (string.IsNullOrWhiteSpace(request.LocalPath))
             errors.Add("LocalPath is required");
 
         return errors;
@@ -234,7 +234,7 @@ public class ProjectsControllerTests
             LocalPath = project.LocalPath,
             Branch = project.Branch,
             Status = project.Status.ToString(),
-            Framework = project.Framework.ToString(),
+            Framework = project.Framework.GetDisplayName(),
             Enabled = project.Enabled,
             LastSyncAt = project.LastSyncAt,
             LastSyncedVersion = project.LastSyncedVersion
@@ -247,29 +247,7 @@ public class ProjectsControllerTests
         if (project == null || !project.Enabled)
             return false;
 
-        return await _syncServiceMock.Object.SyncProjectAsync(projectId, SyncTrigger.Manual);
+        var result = await _syncServiceMock.Object.SyncAsync(projectId, SyncTrigger.Manual, null, default);
+        return result.Success;
     }
-}
-
-// DTOs for testing
-public class CreateProjectDto
-{
-    public string Name { get; set; } = string.Empty;
-    public string Repository { get; set; } = string.Empty;
-    public string LocalPath { get; set; } = string.Empty;
-    public string? Branch { get; set; }
-}
-
-public class ProjectDto
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string Repository { get; set; } = string.Empty;
-    public string LocalPath { get; set; } = string.Empty;
-    public string Branch { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-    public string Framework { get; set; } = string.Empty;
-    public bool Enabled { get; set; }
-    public DateTime? LastSyncAt { get; set; }
-    public string? LastSyncedVersion { get; set; }
 }
