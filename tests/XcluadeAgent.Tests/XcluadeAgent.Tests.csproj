@@ -30,8 +30,4 @@
     <ProjectReference Include="..\..\src\XcluadeAgent.Infrastructure\XcluadeAgent.Infrastructure.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
 </Project>
