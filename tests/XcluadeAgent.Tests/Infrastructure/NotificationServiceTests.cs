@@ -111,7 +111,7 @@ public class NotificationServiceTests
             NotificationChannel.Slack => identifier.StartsWith("https://hooks.slack.com/"),
             NotificationChannel.Telegram => long.TryParse(identifier, out _),
             NotificationChannel.Email => identifier.Contains("@"),
-            NotificationChannel.LineOa => !string.IsNullOrEmpty(identifier),
+            NotificationChannel.LineOA => !string.IsNullOrEmpty(identifier),
             _ => false
         };
     }
@@ -146,14 +146,4 @@ public class NotificationServiceTests
             ["timestamp"] = DateTime.UtcNow.ToString("o")
         };
     }
-}
-
-public enum NotificationChannel
-{
-    Discord,
-    Slack,
-    Telegram,
-    Email,
-    LineOa,
-    Webhook
 }
