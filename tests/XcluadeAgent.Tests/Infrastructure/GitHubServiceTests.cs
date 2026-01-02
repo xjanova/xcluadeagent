@@ -1,21 +1,10 @@
 using FluentAssertions;
-using Moq;
 using Xunit;
-using Microsoft.Extensions.Logging;
-using XcluadeAgent.Core.Interfaces;
-using XcluadeAgent.Core.Models;
 
 namespace XcluadeAgent.Tests.Infrastructure;
 
 public class GitHubServiceTests
 {
-    private readonly Mock<ILogger<IGitHubService>> _loggerMock;
-
-    public GitHubServiceTests()
-    {
-        _loggerMock = new Mock<ILogger<IGitHubService>>();
-    }
-
     [Theory]
     [InlineData("https://github.com/owner/repo", "owner", "repo")]
     [InlineData("https://github.com/microsoft/dotnet", "microsoft", "dotnet")]
