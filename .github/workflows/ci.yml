@@ -180,7 +180,7 @@ jobs:
         zip -r ../xcluadeagent-${{ matrix.runtime }}.zip .
 
     - name: Upload release asset
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           ./release/xcluadeagent-${{ matrix.runtime }}.*
