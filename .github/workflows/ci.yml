@@ -20,7 +20,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -37,7 +37,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
 
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       if: github.event_name != 'release'
       with:
         directory: ./coverage
@@ -54,19 +54,19 @@ jobs:
       run: dotnet publish src/XcluadeAgent.Worker/XcluadeAgent.Worker.csproj -c Release -o ./publish/worker
 
     - name: Upload API artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: xcluadeagent-api
         path: ./publish/api
 
     - name: Upload CLI artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: xcluadeagent-cli
         path: ./publish/cli
 
     - name: Upload Worker artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: xcluadeagent-worker
         path: ./publish/worker
@@ -78,7 +78,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -103,7 +103,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -128,7 +128,7 @@ jobs:
           type=sha
 
     - name: Build and push
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ./docker/Dockerfile
@@ -150,7 +150,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -180,7 +180,7 @@ jobs:
         zip -r ../xcluadeagent-${{ matrix.runtime }}.zip .
 
     - name: Upload release asset
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           ./release/xcluadeagent-${{ matrix.runtime }}.*
@@ -200,7 +200,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Build docs
       run: |

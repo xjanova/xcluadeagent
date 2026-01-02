@@ -19,22 +19,22 @@
 
   <ItemGroup>
     <!-- Authentication -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.22" />
 
     <!-- API Documentation -->
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
 
     <!-- Real-time -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />
 
     <!-- Blazor -->
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.22" />
 
     <!-- YAML Configuration -->
     <PackageReference Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
 
     <!-- Logging -->
-    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
   </ItemGroup>
 
 </Project>
