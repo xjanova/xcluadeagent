@@ -60,7 +60,7 @@ public class DashboardController : ControllerBase
             AiStatus = MapAiStatus(aiAvailability),
 
             RecentProjects = projects
-                .OrderByDescending(p => p.LastSyncAt ?? p.CreatedAt)
+                .OrderByDescending(p => p.LastSyncedAt ?? p.CreatedAt)
                 .Take(5)
                 .Select(p => new ProjectSummaryDto
                 {
@@ -70,8 +70,8 @@ public class DashboardController : ControllerBase
                     Status = p.Status.ToString(),
                     StatusColor = GetStatusColor(p.Status),
                     LastSyncedVersion = p.LastSyncedVersion,
-                    LastSyncAt = p.LastSyncAt,
-                    LastSyncAgo = p.LastSyncAt.HasValue ? GetTimeAgo(p.LastSyncAt.Value) : "Never",
+                    LastSyncAt = p.LastSyncedAt,
+                    LastSyncAgo = p.LastSyncedAt.HasValue ? GetTimeAgo(p.LastSyncedAt.Value) : "Never",
                     LocalPath = p.LocalPath
                 })
                 .ToList(),
