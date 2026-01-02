@@ -22,6 +22,93 @@
 
 </div>
 
+## 🆚 XcluadeAgent vs Docker/Watchtower vs GitHub Actions
+
+**ก่อนตัดสินใจใช้ XcluadeAgent ควรพิจารณาว่าเครื่องมือที่มีอยู่แล้วเพียงพอหรือไม่**
+
+### ตารางเปรียบเทียบ (ตรงไปตรงมา)
+
+| คุณสมบัติ | XcluadeAgent | Docker + Watchtower | GitHub Actions |
+|----------|--------------|---------------------|----------------|
+| **ความซับซ้อนในการตั้งค่า** | ปานกลาง | ง่าย (ถ้าใช้ Docker อยู่แล้ว) | ง่าย |
+| **ต้องเรียนรู้ใหม่** | ใช่ | ไม่ (ถ้ารู้ Docker) | ไม่ (ถ้ารู้ YAML) |
+| **Dashboard รวมศูนย์** | ✅ มี | ❌ ไม่มี | ❌ ต้องดูทีละ repo |
+| **รองรับ Non-Docker apps** | ✅ | ❌ Docker เท่านั้น | ✅ |
+| **AI ช่วยแก้ปัญหา** | ✅ | ❌ | ❌ |
+| **Rollback ง่าย** | ✅ กดปุ่มเดียว | ⚠️ ต้อง manual | ⚠️ ต้อง manual |
+| **Multi-project view** | ✅ หน้าเดียว | ❌ ต้องดูทีละตัว | ❌ ต้องดูทีละ repo |
+| **Notification หลายช่อง** | ✅ 5+ ช่อง | ❌ ต้องตั้งเอง | ⚠️ จำกัด |
+| **ค่าใช้จ่าย** | ฟรี (self-hosted) | ฟรี | ฟรี (มี limit) |
+| **Resource usage** | ~100-200MB RAM | ~50MB RAM | 0 (รันที่ GitHub) |
+
+### เมื่อไหร่ควรใช้ Docker + Watchtower แทน
+
+✅ **ใช้ Docker + Watchtower ถ้า:**
+- ทุก project เป็น Docker container อยู่แล้ว
+- ไม่ต้องการ dashboard รวมศูนย์
+- ทีมคุ้นเคย Docker อยู่แล้ว
+- ต้องการความเรียบง่าย ไม่ต้องติดตั้งอะไรเพิ่ม
+
+```bash
+# Watchtower ง่ายมาก:
+docker run -d --name watchtower \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower
+```
+
+### เมื่อไหร่ควรใช้ GitHub Actions แทน
+
+✅ **ใช้ GitHub Actions ถ้า:**
+- มีแค่ 1-3 projects
+- ต้องการ CI/CD ครบวงจร (test, build, deploy)
+- ไม่ต้องการติดตั้งอะไรบน server
+- ยอมรับ GitHub Actions minutes limit
+
+```yaml
+# GitHub Actions ก็ใช้ได้:
+on:
+  release:
+    types: [published]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rsync -avz ./ server:/var/www/app/
+```
+
+### เมื่อไหร่ควรใช้ XcluadeAgent
+
+✅ **ใช้ XcluadeAgent ถ้า:**
+- มีหลาย projects (5+) ที่ต้องจัดการ
+- ต้องการ dashboard รวมศูนย์ ดูทุกอย่างหน้าเดียว
+- มี projects แบบ Non-Docker (PHP, Node, Python บน bare metal)
+- ต้องการ rollback ที่ง่ายและเร็ว
+- ต้องการ AI ช่วยวิเคราะห์ปัญหา
+- ต้องการ notification หลายช่องทาง (LINE, Discord, Telegram)
+- ทีมไม่คุ้นเคย Docker/GitHub Actions
+
+### ข้อเสียของ XcluadeAgent (ตรงๆ)
+
+❌ **สิ่งที่ต้องพิจารณา:**
+- ต้องติดตั้ง .NET Runtime บน server
+- ใช้ RAM มากกว่า Watchtower (~100-200MB vs ~50MB)
+- โปรเจคใหม่ ยังไม่มี community ใหญ่
+- ต้องเรียนรู้ระบบใหม่
+- ถ้ามีแค่ 1-2 projects อาจเป็น overkill
+
+### สรุป
+
+| สถานการณ์ | แนะนำใช้ |
+|----------|---------|
+| ทุกอย่างเป็น Docker | **Watchtower** |
+| 1-3 projects, ต้องการ CI/CD | **GitHub Actions** |
+| 5+ projects, ต้องการ dashboard | **XcluadeAgent** |
+| Non-Docker + ต้องการ AI ช่วย | **XcluadeAgent** |
+| ต้องการความเรียบง่ายที่สุด | **GitHub Actions** หรือ **Watchtower** |
+
+---
+
 ## 🚀 Features
 
 - **📥 GitHub Release Sync** - Automatically download and deploy from GitHub Releases

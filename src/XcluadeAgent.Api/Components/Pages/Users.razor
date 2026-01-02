@@ -1,0 +1,303 @@
+@page "/users"
+@inject HttpClient Http
+
+<PageTitle>Users - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Users</h1>
+            <p class="text-gray-400">Manage user accounts and permissions</p>
+        </div>
+        <button class="btn-primary flex items-center space-x-2" @onclick="ShowAddUser">
+            <span>+</span>
+            <span>Add User</span>
+        </button>
+    </div>
+
+    <!-- License Info -->
+    <div class="card p-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <span class="text-2xl">*</span>
+            <div>
+                <p class="font-medium">User Limit</p>
+                <p class="text-sm text-gray-400">@users.Count / @userLimit users used</p>
+            </div>
+        </div>
+        <div class="w-48">
+            <div class="w-full bg-gray-700 rounded-full h-2">
+                <div class="bg-blue-500 h-2 rounded-full"
+                     style="width: @(userLimit > 0 ? (users.Count * 100 / userLimit) : 0)%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-800">
+                <tr>
+                    <th class="text-left p-4 font-medium">User</th>
+                    <th class="text-left p-4 font-medium">Role</th>
+                    <th class="text-left p-4 font-medium">Status</th>
+                    <th class="text-left p-4 font-medium">2FA</th>
+                    <th class="text-left p-4 font-medium">Last Login</th>
+                    <th class="text-right p-4 font-medium">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700">
+                @foreach (var user in users)
+                {
+                    <tr class="hover:bg-gray-800/50">
+                        <td class="p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold">
+                                    @user.Username[0].ToString().ToUpper()
+                                </div>
+                                <div>
+                                    <p class="font-medium">@user.DisplayName</p>
+                                    <p class="text-sm text-gray-400">@user.Email</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2 py-1 rounded text-sm @GetRoleBadgeClass(user.Role)">
+                                @user.Role
+                            </span>
+                        </td>
+                        <td class="p-4">
+                            @if (user.IsActive)
+                            {
+                                <span class="flex items-center space-x-1 text-green-500">
+                                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                    <span>Active</span>
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="flex items-center space-x-1 text-gray-500">
+                                    <span class="w-2 h-2 rounded-full bg-gray-500"></span>
+                                    <span>Inactive</span>
+                                </span>
+                            }
+                        </td>
+                        <td class="p-4">
+                            @if (user.TwoFactorEnabled)
+                            {
+                                <span class="text-green-500">Enabled</span>
+                            }
+                            else
+                            {
+                                <span class="text-gray-500">Disabled</span>
+                            }
+                        </td>
+                        <td class="p-4 text-gray-400">
+                            @(user.LastLoginAt?.ToString("g") ?? "Never")
+                        </td>
+                        <td class="p-4 text-right">
+                            <div class="flex items-center justify-end space-x-2">
+                                <button class="btn-ghost text-sm px-2 py-1"
+                                        @onclick="() => EditUser(user)">Edit</button>
+                                @if (user.Username != "admin")
+                                {
+                                    <button class="btn-ghost text-sm px-2 py-1 text-red-400 hover:text-red-300"
+                                            @onclick="() => DeleteUser(user.Id)">Delete</button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (!users.Any())
+    {
+        <div class="card p-12 text-center">
+            <div class="text-6xl mb-4">U</div>
+            <h3 class="text-xl font-semibold mb-2">No users found</h3>
+            <p class="text-gray-400">Add your first user to get started</p>
+        </div>
+    }
+</div>
+
+<!-- Add/Edit User Modal -->
+@if (showModal)
+{
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @onclick="CloseModal">
+        <div class="card w-full max-w-lg" @onclick:stopPropagation>
+            <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">@(editingUser == null ? "Add User" : "Edit User")</h2>
+                <button class="btn-ghost" @onclick="CloseModal">X</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Username</label>
+                    <input type="text" class="input w-full" @bind="formData.Username"
+                           disabled="@(editingUser != null)" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Display Name</label>
+                    <input type="text" class="input w-full" @bind="formData.DisplayName" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email</label>
+                    <input type="email" class="input w-full" @bind="formData.Email" />
+                </div>
+                @if (editingUser == null)
+                {
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Password</label>
+                        <input type="password" class="input w-full" @bind="formData.Password" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Confirm Password</label>
+                        <input type="password" class="input w-full" @bind="formData.ConfirmPassword" />
+                    </div>
+                }
+                <div>
+                    <label class="block text-sm font-medium mb-1">Role</label>
+                    <select class="input w-full" @bind="formData.Role">
+                        <option value="Viewer">Viewer - Read only</option>
+                        <option value="Operator">Operator - Can sync and rollback</option>
+                        <option value="Admin">Admin - Full access</option>
+                    </select>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="isActive" class="w-4 h-4" @bind="formData.IsActive" />
+                    <label for="isActive">Active</label>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-between">
+                @if (editingUser != null)
+                {
+                    <button class="btn-secondary" @onclick="ResetPassword">Reset Password</button>
+                }
+                else
+                {
+                    <div></div>
+                }
+                <div class="flex space-x-3">
+                    <button class="btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn-primary" @onclick="SaveUser">
+                        @(editingUser == null ? "Create User" : "Save Changes")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<UserDto> users = new();
+    private int userLimit = 1;
+    private bool showModal = false;
+    private UserDto? editingUser;
+    private UserFormData formData = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        // TODO: Load from API
+        users = new List<UserDto>
+        {
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Username = "admin",
+                DisplayName = "Administrator",
+                Email = "admin@xman4289.com",
+                Role = "Admin",
+                IsActive = true,
+                TwoFactorEnabled = true,
+                LastLoginAt = DateTime.Now.AddHours(-1)
+            }
+        };
+    }
+
+    private void ShowAddUser()
+    {
+        if (users.Count >= userLimit)
+        {
+            // TODO: Show upgrade prompt
+            return;
+        }
+        editingUser = null;
+        formData = new UserFormData { IsActive = true, Role = "Viewer" };
+        showModal = true;
+    }
+
+    private void EditUser(UserDto user)
+    {
+        editingUser = user;
+        formData = new UserFormData
+        {
+            Username = user.Username,
+            DisplayName = user.DisplayName ?? "",
+            Email = user.Email,
+            Role = user.Role,
+            IsActive = user.IsActive
+        };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingUser = null;
+    }
+
+    private async Task SaveUser()
+    {
+        // TODO: Save to API
+        CloseModal();
+        await LoadUsers();
+    }
+
+    private async Task DeleteUser(Guid id)
+    {
+        // TODO: Confirm and delete
+        await LoadUsers();
+    }
+
+    private async Task ResetPassword()
+    {
+        // TODO: Send password reset email
+    }
+
+    private string GetRoleBadgeClass(string role) => role switch
+    {
+        "Admin" => "bg-red-500/20 text-red-400",
+        "Operator" => "bg-blue-500/20 text-blue-400",
+        "Viewer" => "bg-gray-500/20 text-gray-400",
+        _ => "bg-gray-500/20 text-gray-400"
+    };
+
+    private class UserDto
+    {
+        public Guid Id { get; set; }
+        public string Username { get; set; } = "";
+        public string? DisplayName { get; set; }
+        public string Email { get; set; } = "";
+        public string Role { get; set; } = "";
+        public bool IsActive { get; set; }
+        public bool TwoFactorEnabled { get; set; }
+        public DateTime? LastLoginAt { get; set; }
+    }
+
+    private class UserFormData
+    {
+        public string Username { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string? Password { get; set; }
+        public string? ConfirmPassword { get; set; }
+        public string Role { get; set; } = "Viewer";
+        public bool IsActive { get; set; } = true;
+    }
+}

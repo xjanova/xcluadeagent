@@ -1,0 +1,340 @@
+@page "/license"
+@inject HttpClient Http
+
+<PageTitle>License - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold">License</h1>
+        <p class="text-gray-400">Manage your XcluadeAgent license</p>
+    </div>
+
+    <!-- Current License -->
+    <div class="card p-6">
+        <div class="flex items-start justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="w-16 h-16 rounded-xl @GetLicenseBg(license.Type) flex items-center justify-center text-3xl">
+                    @GetLicenseIcon(license.Type)
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold">@license.TypeName</h2>
+                    <p class="text-gray-400">
+                        @if (license.HasLicense)
+                        {
+                            <span>Licensed to @license.LicensedTo</span>
+                        }
+                        else
+                        {
+                            <span>No license active</span>
+                        }
+                    </p>
+                </div>
+            </div>
+            @if (!license.HasLicense || license.Type != "Unlimited")
+            {
+                <button class="btn-primary" @onclick="ShowUpgrade">Upgrade</button>
+            }
+        </div>
+
+        @if (license.HasLicense && license.ExpiresAt.HasValue)
+        {
+            <div class="mt-4 p-3 bg-gray-800 rounded-lg flex items-center justify-between">
+                <span class="text-gray-400">Expires</span>
+                <span class="@(license.ExpiresAt < DateTime.Now.AddDays(30) ? "text-yellow-500" : "text-gray-300")">
+                    @license.ExpiresAt?.ToString("MMMM dd, yyyy")
+                </span>
+            </div>
+        }
+    </div>
+
+    <!-- Usage Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="card p-6">
+            <h3 class="text-lg font-semibold mb-4">Projects</h3>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-400">Used</span>
+                    <span class="font-mono text-lg">@license.ProjectsUsed / @license.ProjectsLimit</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-3">
+                    <div class="@GetUsageBarColor(license.ProjectsUsed, license.ProjectsLimit) h-3 rounded-full transition-all"
+                         style="width: @GetUsagePercent(license.ProjectsUsed, license.ProjectsLimit)%"></div>
+                </div>
+                @if (license.ProjectsUsed >= license.ProjectsLimit)
+                {
+                    <p class="text-sm text-yellow-500">
+                        You've reached your project limit. Upgrade to add more projects.
+                    </p>
+                }
+            </div>
+        </div>
+
+        <div class="card p-6">
+            <h3 class="text-lg font-semibold mb-4">Users</h3>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-gray-400">Used</span>
+                    <span class="font-mono text-lg">@license.UsersUsed / @license.UsersLimit</span>
+                </div>
+                <div class="w-full bg-gray-700 rounded-full h-3">
+                    <div class="@GetUsageBarColor(license.UsersUsed, license.UsersLimit) h-3 rounded-full transition-all"
+                         style="width: @GetUsagePercent(license.UsersUsed, license.UsersLimit)%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features -->
+    <div class="card p-6">
+        <h3 class="text-lg font-semibold mb-4">Features</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            @foreach (var feature in features)
+            {
+                <div class="flex items-center space-x-3 p-3 rounded-lg @(feature.Enabled ? "bg-green-500/10" : "bg-gray-800")">
+                    <span class="text-lg">@(feature.Enabled ? "[+]" : "[-]")</span>
+                    <div>
+                        <p class="font-medium @(feature.Enabled ? "" : "text-gray-500")">@feature.Name</p>
+                        <p class="text-xs text-gray-500">@feature.Description</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- License Key -->
+    @if (license.HasLicense)
+    {
+        <div class="card p-6">
+            <h3 class="text-lg font-semibold mb-4">License Key</h3>
+            <div class="flex space-x-2">
+                <input type="text" class="input flex-1 font-mono"
+                       value="@MaskLicenseKey(license.LicenseKey)" readonly />
+                <button class="btn-secondary" @onclick="CopyLicenseKey">Copy</button>
+            </div>
+        </div>
+    }
+
+    <!-- Activate License -->
+    <div class="card p-6">
+        <h3 class="text-lg font-semibold mb-4">@(license.HasLicense ? "Change License" : "Activate License")</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">License Key</label>
+                <input type="text" class="input w-full font-mono" @bind="newLicenseKey"
+                       placeholder="XXXX-XXXX-XXXX-XXXX" />
+            </div>
+            <button class="btn-primary" @onclick="ActivateLicense">
+                Activate
+            </button>
+        </div>
+    </div>
+
+    <!-- Pricing -->
+    @if (!license.HasLicense || license.Type == "Community")
+    {
+        <div class="card p-6">
+            <h3 class="text-lg font-semibold mb-4">Pricing Plans</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                @foreach (var plan in plans)
+                {
+                    <div class="border border-gray-700 rounded-lg p-6 @(plan.Highlighted ? "border-blue-500 ring-1 ring-blue-500" : "")">
+                        @if (plan.Highlighted)
+                        {
+                            <div class="text-xs text-blue-500 font-medium mb-2">POPULAR</div>
+                        }
+                        <h4 class="text-xl font-bold">@plan.Name</h4>
+                        <div class="mt-2">
+                            <span class="text-3xl font-bold">@plan.Price</span>
+                            @if (!string.IsNullOrEmpty(plan.Period))
+                            {
+                                <span class="text-gray-500">/@plan.Period</span>
+                            }
+                        </div>
+                        <ul class="mt-4 space-y-2">
+                            @foreach (var item in plan.Features)
+                            {
+                                <li class="flex items-center space-x-2 text-sm">
+                                    <span class="text-green-500">[+]</span>
+                                    <span>@item</span>
+                                </li>
+                            }
+                        </ul>
+                        <button class="btn-secondary w-full mt-4" @onclick="() => SelectPlan(plan.Name)">
+                            @(license.Type == plan.Name ? "Current Plan" : "Select")
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private LicenseInfo license = new();
+    private string newLicenseKey = "";
+    private bool showUpgradeModal = false;
+
+    private List<Feature> features = new();
+    private List<Plan> plans = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLicense();
+    }
+
+    private async Task LoadLicense()
+    {
+        // TODO: Load from API
+        license = new LicenseInfo
+        {
+            HasLicense = false,
+            Type = "Community",
+            TypeName = "Community (Free)",
+            ProjectsLimit = 3,
+            ProjectsUsed = 2,
+            UsersLimit = 1,
+            UsersUsed = 1
+        };
+
+        features = new List<Feature>
+        {
+            new("Sync from Releases", "Download and sync from GitHub Releases", true),
+            new("Backup & Rollback", "Automatic backups before sync", true),
+            new("Web Dashboard", "Manage everything from the browser", true),
+            new("CLI Tool", "Control via command line", true),
+            new("Multi-Environment", "Staging/Production environments", license.Type != "Community"),
+            new("Scheduled Sync", "Automatic sync on schedule", license.Type != "Community"),
+            new("AI Assistant", "Smart error analysis and suggestions", license.Type == "Enterprise" || license.Type == "Unlimited"),
+            new("Team Management", "Multiple users with roles", license.Type == "Enterprise" || license.Type == "Unlimited"),
+            new("SSO Integration", "SAML/OIDC authentication", license.Type == "Enterprise" || license.Type == "Unlimited"),
+            new("Audit Logs", "Complete activity history", license.Type == "Enterprise" || license.Type == "Unlimited"),
+            new("API Access", "RESTful API for automation", license.Type != "Community"),
+            new("Priority Support", "24/7 priority support", license.Type == "Enterprise" || license.Type == "Unlimited")
+        };
+
+        plans = new List<Plan>
+        {
+            new()
+            {
+                Name = "Community",
+                Price = "Free",
+                Period = "",
+                Features = new[] { "3 Projects", "1 User", "Basic Features", "Community Support" }
+            },
+            new()
+            {
+                Name = "Professional",
+                Price = "$29",
+                Period = "month",
+                Highlighted = true,
+                Features = new[] { "10 Projects", "5 Users", "All Pro Features", "Email Support", "API Access" }
+            },
+            new()
+            {
+                Name = "Enterprise",
+                Price = "$99",
+                Period = "month",
+                Features = new[] { "50 Projects", "25 Users", "All Features", "Priority Support", "SSO/SAML", "Audit Logs" }
+            }
+        };
+    }
+
+    private void ShowUpgrade()
+    {
+        showUpgradeModal = true;
+    }
+
+    private async Task ActivateLicense()
+    {
+        if (string.IsNullOrWhiteSpace(newLicenseKey))
+            return;
+
+        // TODO: Call API to activate
+        await LoadLicense();
+    }
+
+    private void CopyLicenseKey()
+    {
+        // TODO: Copy to clipboard
+    }
+
+    private void SelectPlan(string planName)
+    {
+        // TODO: Redirect to purchase page
+    }
+
+    private string MaskLicenseKey(string? key)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        if (key.Length <= 8) return key;
+        return key[..4] + "-XXXX-XXXX-" + key[^4..];
+    }
+
+    private string GetLicenseBg(string type) => type switch
+    {
+        "Professional" => "bg-blue-500/20",
+        "Enterprise" => "bg-purple-500/20",
+        "Unlimited" => "bg-yellow-500/20",
+        _ => "bg-gray-500/20"
+    };
+
+    private string GetLicenseIcon(string type) => type switch
+    {
+        "Professional" => "P",
+        "Enterprise" => "E",
+        "Unlimited" => "*",
+        _ => "C"
+    };
+
+    private int GetUsagePercent(int used, int limit)
+    {
+        if (limit <= 0 || limit == int.MaxValue) return 0;
+        return Math.Min(100, used * 100 / limit);
+    }
+
+    private string GetUsageBarColor(int used, int limit)
+    {
+        var percent = GetUsagePercent(used, limit);
+        if (percent >= 100) return "bg-red-500";
+        if (percent >= 80) return "bg-yellow-500";
+        return "bg-blue-500";
+    }
+
+    private class LicenseInfo
+    {
+        public bool HasLicense { get; set; }
+        public string Type { get; set; } = "Community";
+        public string TypeName { get; set; } = "Community (Free)";
+        public string? LicensedTo { get; set; }
+        public string? LicenseKey { get; set; }
+        public DateTime? ExpiresAt { get; set; }
+        public int ProjectsLimit { get; set; }
+        public int ProjectsUsed { get; set; }
+        public int UsersLimit { get; set; }
+        public int UsersUsed { get; set; }
+    }
+
+    private class Feature
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public bool Enabled { get; set; }
+
+        public Feature(string name, string description, bool enabled)
+        {
+            Name = name;
+            Description = description;
+            Enabled = enabled;
+        }
+    }
+
+    private class Plan
+    {
+        public string Name { get; set; } = "";
+        public string Price { get; set; } = "";
+        public string? Period { get; set; }
+        public bool Highlighted { get; set; }
+        public string[] Features { get; set; } = Array.Empty<string>();
+    }
+}

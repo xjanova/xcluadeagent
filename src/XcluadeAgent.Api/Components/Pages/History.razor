@@ -1,0 +1,363 @@
+@page "/history"
+@inject HttpClient Http
+
+<PageTitle>Sync History - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Sync History</h1>
+            <p class="text-gray-400">View all synchronization activities</p>
+        </div>
+        <div class="flex space-x-2">
+            <button class="btn-secondary" @onclick="ExportHistory">Export</button>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <div class="flex flex-wrap gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <select class="input w-full" @bind="projectFilter">
+                    <option value="">All Projects</option>
+                    @foreach (var project in projectNames)
+                    {
+                        <option value="@project">@project</option>
+                    }
+                </select>
+            </div>
+            <select class="input w-40" @bind="statusFilter">
+                <option value="">All Status</option>
+                <option value="true">Success</option>
+                <option value="false">Failed</option>
+            </select>
+            <select class="input w-40" @bind="triggerFilter">
+                <option value="">All Triggers</option>
+                <option value="Manual">Manual</option>
+                <option value="Webhook">Webhook</option>
+                <option value="Scheduled">Scheduled</option>
+            </select>
+            <input type="date" class="input w-40" @bind="dateFrom" />
+            <input type="date" class="input w-40" @bind="dateTo" />
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+            <p class="text-gray-400 text-sm">Total Syncs</p>
+            <p class="text-2xl font-bold">@history.Count</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-gray-400 text-sm">Successful</p>
+            <p class="text-2xl font-bold text-green-500">@history.Count(h => h.Success)</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-gray-400 text-sm">Failed</p>
+            <p class="text-2xl font-bold text-red-500">@history.Count(h => !h.Success)</p>
+        </div>
+        <div class="card p-4">
+            <p class="text-gray-400 text-sm">Success Rate</p>
+            <p class="text-2xl font-bold">@(history.Any() ? (history.Count(h => h.Success) * 100 / history.Count) : 0)%</p>
+        </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-800">
+                <tr>
+                    <th class="text-left p-4 font-medium">Project</th>
+                    <th class="text-left p-4 font-medium">Version</th>
+                    <th class="text-left p-4 font-medium">Status</th>
+                    <th class="text-left p-4 font-medium">Trigger</th>
+                    <th class="text-left p-4 font-medium">Duration</th>
+                    <th class="text-left p-4 font-medium">Files</th>
+                    <th class="text-left p-4 font-medium">Started</th>
+                    <th class="text-right p-4 font-medium">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700">
+                @foreach (var item in FilteredHistory)
+                {
+                    <tr class="hover:bg-gray-800/50 cursor-pointer" @onclick="() => ShowDetails(item)">
+                        <td class="p-4">
+                            <div class="flex items-center space-x-2">
+                                @if (item.IsRollback)
+                                {
+                                    <span class="text-yellow-500" title="Rollback">R</span>
+                                }
+                                <span class="font-medium">@item.ProjectName</span>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-mono text-sm">
+                                @if (!string.IsNullOrEmpty(item.FromVersion))
+                                {
+                                    <span class="text-gray-500">@item.FromVersion</span>
+                                    <span class="text-gray-600 mx-1">-></span>
+                                }
+                                <span class="text-blue-400">@item.ToVersion</span>
+                            </div>
+                        </td>
+                        <td class="p-4">
+                            @if (item.Success)
+                            {
+                                <span class="px-2 py-1 rounded text-sm bg-green-500/20 text-green-400">
+                                    Success
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="px-2 py-1 rounded text-sm bg-red-500/20 text-red-400">
+                                    Failed
+                                </span>
+                            }
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2 py-1 rounded text-sm @GetTriggerClass(item.Trigger)">
+                                @item.Trigger
+                            </span>
+                        </td>
+                        <td class="p-4 text-gray-400">
+                            @FormatDuration(item.DurationMs)
+                        </td>
+                        <td class="p-4">
+                            @item.FilesChanged files
+                        </td>
+                        <td class="p-4 text-gray-400">
+                            @item.StartedAt.ToString("g")
+                        </td>
+                        <td class="p-4 text-right">
+                            <div class="flex items-center justify-end space-x-2">
+                                @if (item.Success && !string.IsNullOrEmpty(item.BackupPath))
+                                {
+                                    <button class="btn-ghost text-sm px-2 py-1" @onclick:stopPropagation
+                                            @onclick="() => RollbackTo(item)" title="Rollback">
+                                        Rollback
+                                    </button>
+                                }
+                                <button class="btn-ghost text-sm px-2 py-1" @onclick:stopPropagation
+                                        @onclick="() => ShowDetails(item)">
+                                    Details
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (!FilteredHistory.Any())
+    {
+        <div class="card p-12 text-center">
+            <div class="text-6xl mb-4">H</div>
+            <h3 class="text-xl font-semibold mb-2">No sync history</h3>
+            <p class="text-gray-400">Sync history will appear here after your first sync</p>
+        </div>
+    }
+
+    <!-- Pagination -->
+    @if (FilteredHistory.Count() > pageSize)
+    {
+        <div class="flex items-center justify-between">
+            <p class="text-sm text-gray-400">
+                Showing @((currentPage - 1) * pageSize + 1) to @Math.Min(currentPage * pageSize, FilteredHistory.Count()) of @FilteredHistory.Count() entries
+            </p>
+            <div class="flex space-x-2">
+                <button class="btn-secondary" disabled="@(currentPage == 1)" @onclick="PrevPage">Previous</button>
+                <button class="btn-secondary" disabled="@(currentPage * pageSize >= FilteredHistory.Count())" @onclick="NextPage">Next</button>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Details Modal -->
+@if (selectedItem != null)
+{
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @onclick="() => selectedItem = null">
+        <div class="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" @onclick:stopPropagation>
+            <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">Sync Details</h2>
+                <button class="btn-ghost" @onclick="() => selectedItem = null">X</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-400">Project</p>
+                        <p class="font-medium">@selectedItem.ProjectName</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Status</p>
+                        <p class="font-medium @(selectedItem.Success ? "text-green-500" : "text-red-500")">
+                            @(selectedItem.Success ? "Success" : "Failed")
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">From Version</p>
+                        <p class="font-mono">@(selectedItem.FromVersion ?? "N/A")</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">To Version</p>
+                        <p class="font-mono">@selectedItem.ToVersion</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Trigger</p>
+                        <p>@selectedItem.Trigger</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Initiated By</p>
+                        <p>@(selectedItem.InitiatedBy ?? "System")</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Started At</p>
+                        <p>@selectedItem.StartedAt.ToString("F")</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Completed At</p>
+                        <p>@(selectedItem.CompletedAt?.ToString("F") ?? "N/A")</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Duration</p>
+                        <p>@FormatDuration(selectedItem.DurationMs)</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Files Changed</p>
+                        <p>@selectedItem.FilesChanged</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Data Transferred</p>
+                        <p>@FormatBytes(selectedItem.BytesTransferred)</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-400">Backup</p>
+                        <p class="font-mono text-xs">@(selectedItem.BackupPath ?? "N/A")</p>
+                    </div>
+                </div>
+
+                @if (!selectedItem.Success && !string.IsNullOrEmpty(selectedItem.ErrorMessage))
+                {
+                    <div>
+                        <p class="text-sm text-gray-400 mb-2">Error Message</p>
+                        <div class="bg-red-500/10 border border-red-500/30 rounded p-3">
+                            <pre class="text-sm text-red-400 whitespace-pre-wrap">@selectedItem.ErrorMessage</pre>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end space-x-3">
+                @if (selectedItem.Success && !string.IsNullOrEmpty(selectedItem.BackupPath))
+                {
+                    <button class="btn-secondary" @onclick="() => RollbackTo(selectedItem)">
+                        Rollback to this version
+                    </button>
+                }
+                <button class="btn-primary" @onclick="() => selectedItem = null">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SyncHistoryDto> history = new();
+    private List<string> projectNames = new();
+    private SyncHistoryDto? selectedItem;
+
+    private string projectFilter = "";
+    private string statusFilter = "";
+    private string triggerFilter = "";
+    private DateTime? dateFrom;
+    private DateTime? dateTo;
+    private int currentPage = 1;
+    private int pageSize = 20;
+
+    private IEnumerable<SyncHistoryDto> FilteredHistory => history
+        .Where(h => string.IsNullOrEmpty(projectFilter) || h.ProjectName == projectFilter)
+        .Where(h => string.IsNullOrEmpty(statusFilter) || h.Success.ToString() == statusFilter)
+        .Where(h => string.IsNullOrEmpty(triggerFilter) || h.Trigger == triggerFilter)
+        .Where(h => !dateFrom.HasValue || h.StartedAt >= dateFrom.Value)
+        .Where(h => !dateTo.HasValue || h.StartedAt <= dateTo.Value.AddDays(1))
+        .OrderByDescending(h => h.StartedAt);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        // TODO: Load from API
+        history = new List<SyncHistoryDto>
+        {
+            new() { Id = Guid.NewGuid(), ProjectName = "xman-website", FromVersion = "v2.0.9", ToVersion = "v2.1.0", Success = true, Trigger = "Webhook", StartedAt = DateTime.Now.AddHours(-2), CompletedAt = DateTime.Now.AddHours(-2).AddMinutes(1), DurationMs = 45000, FilesChanged = 23, BytesTransferred = 1024000, BackupPath = "/backups/xman-website/2024-01-01" },
+            new() { Id = Guid.NewGuid(), ProjectName = "api-gateway", FromVersion = "v1.5.2", ToVersion = "v1.5.3", Success = true, Trigger = "Manual", InitiatedBy = "admin", StartedAt = DateTime.Now.AddDays(-1), CompletedAt = DateTime.Now.AddDays(-1).AddMinutes(2), DurationMs = 120000, FilesChanged = 12, BytesTransferred = 512000, BackupPath = "/backups/api-gateway/2024-01-01" },
+            new() { Id = Guid.NewGuid(), ProjectName = "admin-dashboard", FromVersion = "v2.9.0", ToVersion = "v3.0.0-beta", Success = false, Trigger = "Scheduled", StartedAt = DateTime.Now.AddHours(-5), CompletedAt = DateTime.Now.AddHours(-5).AddMinutes(3), DurationMs = 180000, FilesChanged = 0, BytesTransferred = 2048000, ErrorMessage = "npm install failed: ERESOLVE unable to resolve dependency tree" },
+            new() { Id = Guid.NewGuid(), ProjectName = "xman-website", FromVersion = "v2.0.8", ToVersion = "v2.0.9", Success = true, Trigger = "Webhook", StartedAt = DateTime.Now.AddDays(-3), CompletedAt = DateTime.Now.AddDays(-3).AddMinutes(1), DurationMs = 38000, FilesChanged = 8, BytesTransferred = 256000, BackupPath = "/backups/xman-website/2024-01-01" }
+        };
+
+        projectNames = history.Select(h => h.ProjectName).Distinct().ToList();
+    }
+
+    private void ShowDetails(SyncHistoryDto item)
+    {
+        selectedItem = item;
+    }
+
+    private async Task RollbackTo(SyncHistoryDto item)
+    {
+        // TODO: Trigger rollback
+    }
+
+    private async Task ExportHistory()
+    {
+        // TODO: Export to CSV
+    }
+
+    private void PrevPage() => currentPage = Math.Max(1, currentPage - 1);
+    private void NextPage() => currentPage++;
+
+    private string FormatDuration(long? ms)
+    {
+        if (!ms.HasValue) return "N/A";
+        var ts = TimeSpan.FromMilliseconds(ms.Value);
+        if (ts.TotalMinutes >= 1)
+            return $"{ts.Minutes}m {ts.Seconds}s";
+        return $"{ts.Seconds}s";
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024:F1} KB";
+        return $"{bytes / (1024 * 1024):F1} MB";
+    }
+
+    private string GetTriggerClass(string trigger) => trigger switch
+    {
+        "Manual" => "bg-blue-500/20 text-blue-400",
+        "Webhook" => "bg-green-500/20 text-green-400",
+        "Scheduled" => "bg-purple-500/20 text-purple-400",
+        _ => "bg-gray-500/20 text-gray-400"
+    };
+
+    private class SyncHistoryDto
+    {
+        public Guid Id { get; set; }
+        public string ProjectName { get; set; } = "";
+        public string? FromVersion { get; set; }
+        public string? ToVersion { get; set; }
+        public bool Success { get; set; }
+        public string Trigger { get; set; } = "";
+        public string? InitiatedBy { get; set; }
+        public DateTime StartedAt { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public long? DurationMs { get; set; }
+        public int FilesChanged { get; set; }
+        public long BytesTransferred { get; set; }
+        public string? BackupPath { get; set; }
+        public string? ErrorMessage { get; set; }
+        public bool IsRollback { get; set; }
+    }
+}

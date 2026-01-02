@@ -1,0 +1,366 @@
+@page "/projects"
+@using XcluadeAgent.Shared.DTOs
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Projects - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Projects</h1>
+            <p class="text-gray-400">Manage your synchronized projects</p>
+        </div>
+        <button class="btn-primary flex items-center space-x-2" @onclick="ShowAddProject">
+            <span>+</span>
+            <span>Add Project</span>
+        </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <div class="flex flex-wrap gap-4">
+            <div class="flex-1 min-w-[200px]">
+                <input type="text" placeholder="Search projects..."
+                       class="input w-full"
+                       @bind="searchQuery"
+                       @bind:event="oninput" />
+            </div>
+            <select class="input w-40" @bind="statusFilter">
+                <option value="">All Status</option>
+                <option value="Synced">Synced</option>
+                <option value="Pending">Pending</option>
+                <option value="Syncing">Syncing</option>
+                <option value="Failed">Failed</option>
+            </select>
+            <select class="input w-40" @bind="frameworkFilter">
+                <option value="">All Frameworks</option>
+                <option value="Laravel">Laravel</option>
+                <option value="NodeJs">Node.js</option>
+                <option value="React">React</option>
+                <option value="Vue">Vue</option>
+                <option value="Django">Django</option>
+                <option value="DotNet">.NET</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Projects Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        @foreach (var project in FilteredProjects)
+        {
+            <div class="card hover:ring-1 hover:ring-blue-500 transition-all cursor-pointer"
+                 @onclick="() => ViewProject(project.Id)">
+                <div class="p-4 border-b border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-lg @GetFrameworkBg(project.Framework) flex items-center justify-center text-xl">
+                                @GetFrameworkIcon(project.Framework)
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">@project.Name</h3>
+                                <p class="text-sm text-gray-400">@project.Repository</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            @if (project.Enabled)
+                            {
+                                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                            }
+                            else
+                            {
+                                <span class="w-2 h-2 rounded-full bg-gray-500"></span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Status</span>
+                        <span class="@GetStatusClass(project.Status) font-medium">@project.Status</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Version</span>
+                        <span class="font-mono">@(project.LastSyncedVersion ?? "N/A")</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Sync</span>
+                        <span>@(project.LastSyncAt?.ToString("g") ?? "Never")</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Branch</span>
+                        <span class="font-mono text-blue-400">@project.Branch</span>
+                    </div>
+                </div>
+                <div class="p-4 border-t border-gray-700 flex justify-between">
+                    <button class="btn-secondary text-sm px-3 py-1" @onclick:stopPropagation
+                            @onclick="() => SyncProject(project.Id)">
+                        Sync Now
+                    </button>
+                    <div class="flex space-x-2">
+                        <button class="btn-ghost text-sm px-2 py-1" @onclick:stopPropagation
+                                @onclick="() => EditProject(project.Id)" title="Edit">
+                            Edit
+                        </button>
+                        <button class="btn-ghost text-sm px-2 py-1 text-red-400 hover:text-red-300" @onclick:stopPropagation
+                                @onclick="() => DeleteProject(project.Id)" title="Delete">
+                            Del
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (!FilteredProjects.Any())
+    {
+        <div class="card p-12 text-center">
+            <div class="text-6xl mb-4">📦</div>
+            <h3 class="text-xl font-semibold mb-2">No projects found</h3>
+            <p class="text-gray-400 mb-4">
+                @if (string.IsNullOrEmpty(searchQuery) && string.IsNullOrEmpty(statusFilter))
+                {
+                    <span>Get started by adding your first project</span>
+                }
+                else
+                {
+                    <span>No projects match your current filters</span>
+                }
+            </p>
+            @if (string.IsNullOrEmpty(searchQuery) && string.IsNullOrEmpty(statusFilter))
+            {
+                <button class="btn-primary" @onclick="ShowAddProject">Add Project</button>
+            }
+        </div>
+    }
+</div>
+
+<!-- Add/Edit Project Modal -->
+@if (showModal)
+{
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @onclick="CloseModal">
+        <div class="card w-full max-w-2xl max-h-[90vh] overflow-y-auto" @onclick:stopPropagation>
+            <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                <h2 class="text-lg font-semibold">@(editingProject == null ? "Add Project" : "Edit Project")</h2>
+                <button class="btn-ghost" @onclick="CloseModal">X</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Project Name</label>
+                    <input type="text" class="input w-full" @bind="formData.Name"
+                           placeholder="my-awesome-project" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">GitHub Repository</label>
+                    <input type="text" class="input w-full" @bind="formData.Repository"
+                           placeholder="owner/repository" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Local Path</label>
+                    <input type="text" class="input w-full" @bind="formData.LocalPath"
+                           placeholder="/var/www/my-project" />
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Branch</label>
+                        <input type="text" class="input w-full" @bind="formData.Branch"
+                               placeholder="main" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Environment</label>
+                        <select class="input w-full" @bind="formData.Environment">
+                            <option value="production">Production</option>
+                            <option value="staging">Staging</option>
+                            <option value="development">Development</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Framework</label>
+                        <select class="input w-full" @bind="formData.Framework">
+                            <option value="Auto">Auto Detect</option>
+                            <option value="Laravel">Laravel</option>
+                            <option value="NodeJs">Node.js</option>
+                            <option value="React">React</option>
+                            <option value="Vue">Vue</option>
+                            <option value="Django">Django</option>
+                            <option value="DotNet">.NET</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2 pt-6">
+                        <input type="checkbox" id="useReleases" class="w-4 h-4"
+                               @bind="formData.UseReleases" />
+                        <label for="useReleases">Use GitHub Releases</label>
+                    </div>
+                </div>
+                @if (formData.UseReleases)
+                {
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Release Tag Pattern</label>
+                        <input type="text" class="input w-full" @bind="formData.ReleaseTagPattern"
+                               placeholder="v*" />
+                        <p class="text-xs text-gray-500 mt-1">e.g., v*, release-*, prod-*</p>
+                    </div>
+                }
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="enabled" class="w-4 h-4"
+                           @bind="formData.Enabled" />
+                    <label for="enabled">Enabled</label>
+                </div>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end space-x-3">
+                <button class="btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn-primary" @onclick="SaveProject">
+                    @(editingProject == null ? "Create Project" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProjectListItemDto> projects = new();
+    private string searchQuery = "";
+    private string statusFilter = "";
+    private string frameworkFilter = "";
+    private bool showModal = false;
+    private ProjectListItemDto? editingProject;
+    private ProjectFormData formData = new();
+
+    private IEnumerable<ProjectListItemDto> FilteredProjects => projects
+        .Where(p => string.IsNullOrEmpty(searchQuery) ||
+                    p.Name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    p.Repository.Contains(searchQuery, StringComparison.OrdinalIgnoreCase))
+        .Where(p => string.IsNullOrEmpty(statusFilter) || p.Status == statusFilter)
+        .Where(p => string.IsNullOrEmpty(frameworkFilter) || p.Framework == frameworkFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        // TODO: Fetch from API
+        // var response = await Http.GetFromJsonAsync<ApiResponse<List<ProjectListItemDto>>>("api/v1/projects");
+        // projects = response?.Data ?? new();
+
+        // Mock data
+        projects = new List<ProjectListItemDto>
+        {
+            new() { Id = Guid.NewGuid(), Name = "xman-website", Repository = "xjanova/xman-website", Branch = "main", Framework = "Laravel", Status = "Synced", Enabled = true, LastSyncedVersion = "v2.1.0", LastSyncAt = DateTime.Now.AddHours(-2) },
+            new() { Id = Guid.NewGuid(), Name = "api-gateway", Repository = "xjanova/api-gateway", Branch = "main", Framework = "NodeJs", Status = "Pending", Enabled = true, LastSyncedVersion = "v1.5.3", LastSyncAt = DateTime.Now.AddDays(-1) },
+            new() { Id = Guid.NewGuid(), Name = "admin-dashboard", Repository = "xjanova/admin-dashboard", Branch = "develop", Framework = "React", Status = "Failed", Enabled = true, LastSyncedVersion = "v3.0.0-beta", LastSyncAt = DateTime.Now.AddHours(-5) },
+            new() { Id = Guid.NewGuid(), Name = "legacy-cms", Repository = "xjanova/legacy-cms", Branch = "master", Framework = "Other", Status = "Synced", Enabled = false, LastSyncedVersion = "v1.0.0", LastSyncAt = DateTime.Now.AddDays(-30) }
+        };
+    }
+
+    private void ViewProject(Guid id) => Navigation.NavigateTo($"/projects/{id}");
+    private void EditProject(Guid id)
+    {
+        editingProject = projects.FirstOrDefault(p => p.Id == id);
+        if (editingProject != null)
+        {
+            formData = new ProjectFormData
+            {
+                Name = editingProject.Name,
+                Repository = editingProject.Repository,
+                Branch = editingProject.Branch,
+                Framework = editingProject.Framework,
+                Enabled = editingProject.Enabled
+            };
+            showModal = true;
+        }
+    }
+
+    private void ShowAddProject()
+    {
+        editingProject = null;
+        formData = new ProjectFormData { Enabled = true, Branch = "main", Framework = "Auto", Environment = "production" };
+        showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        editingProject = null;
+    }
+
+    private async Task SaveProject()
+    {
+        // TODO: Call API to save project
+        CloseModal();
+        await LoadProjects();
+    }
+
+    private async Task SyncProject(Guid id)
+    {
+        // TODO: Call API to trigger sync
+        // await Http.PostAsync($"api/v1/projects/{id}/sync", null);
+    }
+
+    private async Task DeleteProject(Guid id)
+    {
+        // TODO: Confirm and call API to delete
+        // await Http.DeleteAsync($"api/v1/projects/{id}");
+        await LoadProjects();
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        "Synced" => "text-green-500",
+        "Pending" or "Syncing" => "text-yellow-500",
+        "Failed" => "text-red-500",
+        _ => "text-gray-500"
+    };
+
+    private string GetFrameworkBg(string framework) => framework switch
+    {
+        "Laravel" => "bg-red-500/20",
+        "NodeJs" or "React" or "Vue" => "bg-green-500/20",
+        "Django" => "bg-yellow-500/20",
+        "DotNet" => "bg-purple-500/20",
+        _ => "bg-gray-500/20"
+    };
+
+    private string GetFrameworkIcon(string framework) => framework switch
+    {
+        "Laravel" => "L",
+        "NodeJs" => "N",
+        "React" => "R",
+        "Vue" => "V",
+        "Django" => "D",
+        "DotNet" => "#",
+        _ => "?"
+    };
+
+    private class ProjectListItemDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Repository { get; set; } = "";
+        public string Branch { get; set; } = "";
+        public string Framework { get; set; } = "";
+        public string Status { get; set; } = "";
+        public bool Enabled { get; set; }
+        public string? LastSyncedVersion { get; set; }
+        public DateTime? LastSyncAt { get; set; }
+    }
+
+    private class ProjectFormData
+    {
+        public string Name { get; set; } = "";
+        public string Repository { get; set; } = "";
+        public string LocalPath { get; set; } = "";
+        public string Branch { get; set; } = "main";
+        public string Framework { get; set; } = "Auto";
+        public string Environment { get; set; } = "production";
+        public bool UseReleases { get; set; } = true;
+        public string? ReleaseTagPattern { get; set; }
+        public bool Enabled { get; set; } = true;
+    }
+}

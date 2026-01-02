@@ -1,0 +1,491 @@
+@page "/settings"
+@inject HttpClient Http
+
+<PageTitle>Settings - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div>
+        <h1 class="text-2xl font-bold">Settings</h1>
+        <p class="text-gray-400">Configure your XcluadeAgent installation</p>
+    </div>
+
+    <!-- Settings Navigation -->
+    <div class="flex space-x-1 border-b border-gray-700">
+        @foreach (var tab in tabs)
+        {
+            <button class="px-4 py-2 font-medium transition-colors @(activeTab == tab.Key ? "text-blue-500 border-b-2 border-blue-500" : "text-gray-400 hover:text-white")"
+                    @onclick="() => activeTab = tab.Key">
+                @tab.Value
+            </button>
+        }
+    </div>
+
+    <!-- General Settings -->
+    @if (activeTab == "general")
+    {
+        <div class="space-y-6">
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">Server Configuration</h2>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Port</label>
+                            <input type="number" class="input w-full" @bind="settings.Port" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">External URL</label>
+                            <input type="text" class="input w-full" @bind="settings.ExternalUrl"
+                                   placeholder="https://sync.yourdomain.com" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Data Directory</label>
+                        <input type="text" class="input w-full" @bind="settings.DataDir"
+                               placeholder="/var/lib/xcluadeagent" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">Sync Settings</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium">Auto Sync</p>
+                            <p class="text-sm text-gray-400">Automatically sync when new releases are detected</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="settings.AutoSync" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium">Create Backups</p>
+                            <p class="text-sm text-gray-400">Create backup before each sync</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="settings.CreateBackups" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Backup Retention (days)</label>
+                        <input type="number" class="input w-32" @bind="settings.BackupRetentionDays" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- GitHub Settings -->
+    @if (activeTab == "github")
+    {
+        <div class="card p-6">
+            <h2 class="text-lg font-semibold mb-4">GitHub Integration</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Personal Access Token</label>
+                    <div class="flex space-x-2">
+                        <input type="password" class="input flex-1"
+                               placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                               @bind="settings.GitHubToken" />
+                        <button class="btn-secondary">Test</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Required scopes: repo, read:packages
+                    </p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Webhook Secret</label>
+                    <div class="flex space-x-2">
+                        <input type="text" class="input flex-1"
+                               @bind="settings.WebhookSecret" />
+                        <button class="btn-secondary" @onclick="GenerateSecret">Generate</button>
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-800 rounded-lg">
+                    <p class="text-sm font-medium mb-2">Webhook URL</p>
+                    <code class="text-sm text-blue-400">@settings.ExternalUrl/api/v1/webhooks/github</code>
+                    <p class="text-xs text-gray-500 mt-2">
+                        Configure this URL in your GitHub repository settings
+                    </p>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- AI Settings -->
+    @if (activeTab == "ai")
+    {
+        <div class="space-y-6">
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">AI Assistant</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium">Enable AI</p>
+                            <p class="text-sm text-gray-400">Use AI to analyze errors and suggest fixes</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="settings.AiEnabled" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+
+                    @if (settings.AiEnabled)
+                    {
+                        <div>
+                            <label class="block text-sm font-medium mb-2">AI Mode</label>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                @foreach (var mode in aiModes)
+                                {
+                                    <div class="p-3 border rounded-lg cursor-pointer transition-colors @(settings.AiMode == mode.Key ? "border-blue-500 bg-blue-500/10" : "border-gray-700 hover:border-gray-600")"
+                                         @onclick="() => settings.AiMode = mode.Key">
+                                        <p class="font-medium">@mode.Name</p>
+                                        <p class="text-xs text-gray-400">@mode.Description</p>
+                                        <p class="text-xs mt-1 @mode.RiskClass">Risk: @mode.Risk</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @if (settings.AiEnabled)
+            {
+                <div class="card p-6">
+                    <h2 class="text-lg font-semibold mb-4">Primary AI Provider</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Provider</label>
+                            <select class="input w-full" @bind="settings.AiProvider">
+                                <option value="ollama">Ollama (Local - Free)</option>
+                                <option value="claude">Claude API</option>
+                                <option value="openai">OpenAI</option>
+                            </select>
+                        </div>
+
+                        @if (settings.AiProvider == "ollama")
+                        {
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Ollama Endpoint</label>
+                                <input type="text" class="input w-full" @bind="settings.OllamaEndpoint"
+                                       placeholder="http://localhost:11434" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Model</label>
+                                <select class="input w-full" @bind="settings.OllamaModel">
+                                    <option value="qwen2.5-coder:7b">qwen2.5-coder:7b (Recommended)</option>
+                                    <option value="codellama:7b">codellama:7b</option>
+                                    <option value="deepseek-coder:6.7b">deepseek-coder:6.7b</option>
+                                    <option value="llama2:7b">llama2:7b</option>
+                                </select>
+                            </div>
+                        }
+                        else if (settings.AiProvider == "claude")
+                        {
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Key</label>
+                                <input type="password" class="input w-full" @bind="settings.ClaudeApiKey"
+                                       placeholder="sk-ant-..." />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Model</label>
+                                <select class="input w-full" @bind="settings.ClaudeModel">
+                                    <option value="claude-3-haiku">Claude 3 Haiku (Fast & Cheap)</option>
+                                    <option value="claude-3-sonnet">Claude 3 Sonnet (Balanced)</option>
+                                    <option value="claude-3-opus">Claude 3 Opus (Best Quality)</option>
+                                </select>
+                            </div>
+                        }
+                        else if (settings.AiProvider == "openai")
+                        {
+                            <div>
+                                <label class="block text-sm font-medium mb-1">API Key</label>
+                                <input type="password" class="input w-full" @bind="settings.OpenAiApiKey"
+                                       placeholder="sk-..." />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Model</label>
+                                <select class="input w-full" @bind="settings.OpenAiModel">
+                                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                    <option value="gpt-4">GPT-4</option>
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Cheaper)</option>
+                                </select>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="card p-6">
+                    <h2 class="text-lg font-semibold mb-4">Budget Control</h2>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium">Enable Budget Limit</p>
+                                <p class="text-sm text-gray-400">Limit monthly AI API spending</p>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" @bind="settings.AiBudgetEnabled" />
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        @if (settings.AiBudgetEnabled)
+                        {
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Monthly Limit (USD)</label>
+                                <input type="number" step="0.01" class="input w-40" @bind="settings.AiBudgetLimit" />
+                            </div>
+                            <div class="p-4 bg-gray-800 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm">Current Usage</span>
+                                    <span class="text-sm font-mono">$@settings.AiBudgetUsed / $@settings.AiBudgetLimit</span>
+                                </div>
+                                <div class="w-full bg-gray-700 rounded-full h-2">
+                                    <div class="bg-blue-500 h-2 rounded-full"
+                                         style="width: @(settings.AiBudgetLimit > 0 ? (settings.AiBudgetUsed / settings.AiBudgetLimit * 100) : 0)%"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Notifications Settings -->
+    @if (activeTab == "notifications")
+    {
+        <div class="space-y-6">
+            @foreach (var channel in notificationChannels)
+            {
+                <div class="card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-2xl">@channel.Icon</span>
+                            <h2 class="text-lg font-semibold">@channel.Name</h2>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="channel.Enabled" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    @if (channel.Enabled)
+                    {
+                        <div class="space-y-4">
+                            @foreach (var field in channel.Fields)
+                            {
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">@field.Label</label>
+                                    <input type="@field.Type" class="input w-full"
+                                           placeholder="@field.Placeholder"
+                                           @bind="field.Value" />
+                                </div>
+                            }
+                            <div class="flex justify-end">
+                                <button class="btn-secondary">Test Notification</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Security Settings -->
+    @if (activeTab == "security")
+    {
+        <div class="space-y-6">
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">Authentication</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Session Timeout (minutes)</label>
+                        <input type="number" class="input w-40" @bind="settings.SessionTimeout" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium">Require 2FA for Admins</p>
+                            <p class="text-sm text-gray-400">Force two-factor authentication for admin accounts</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="settings.Require2FA" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-6">
+                <h2 class="text-lg font-semibold mb-4">API Access</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium">Enable API Access</p>
+                            <p class="text-sm text-gray-400">Allow external API access with tokens</p>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="settings.ApiEnabled" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    @if (settings.ApiEnabled)
+                    {
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Rate Limit (requests/minute)</label>
+                            <input type="number" class="input w-40" @bind="settings.RateLimit" />
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Save Button -->
+    <div class="flex justify-end space-x-3">
+        <button class="btn-secondary" @onclick="ResetSettings">Reset to Defaults</button>
+        <button class="btn-primary" @onclick="SaveSettings">Save Settings</button>
+    </div>
+</div>
+
+@code {
+    private string activeTab = "general";
+    private SettingsModel settings = new();
+
+    private Dictionary<string, string> tabs = new()
+    {
+        { "general", "General" },
+        { "github", "GitHub" },
+        { "ai", "AI Assistant" },
+        { "notifications", "Notifications" },
+        { "security", "Security" }
+    };
+
+    private List<AiModeOption> aiModes = new()
+    {
+        new() { Key = "off", Name = "Off", Description = "AI disabled", Risk = "None", RiskClass = "text-gray-400" },
+        new() { Key = "alert", Name = "Alert", Description = "Smart error notifications", Risk = "Very Low", RiskClass = "text-green-400" },
+        new() { Key = "suggest", Name = "Suggest", Description = "AI suggests fixes", Risk = "Low", RiskClass = "text-green-400" },
+        new() { Key = "review", Name = "Review", Description = "AI creates fixes, requires approval", Risk = "Medium", RiskClass = "text-yellow-400" },
+        new() { Key = "sandbox", Name = "Sandbox", Description = "AI tests fixes in staging first", Risk = "Medium", RiskClass = "text-yellow-400" },
+        new() { Key = "auto", Name = "Auto", Description = "AI fixes production directly", Risk = "HIGH", RiskClass = "text-red-400" }
+    };
+
+    private List<NotificationChannel> notificationChannels = new()
+    {
+        new() { Name = "Discord", Icon = "D", Enabled = false, Fields = new() { new("Webhook URL", "text", "https://discord.com/api/webhooks/...") } },
+        new() { Name = "Telegram", Icon = "T", Enabled = false, Fields = new() { new("Bot Token", "password", "123456:ABC-DEF..."), new("Chat ID", "text", "-1001234567890") } },
+        new() { Name = "LINE OA", Icon = "L", Enabled = false, Fields = new() { new("Channel Access Token", "password", ""), new("User/Group ID", "text", "") } },
+        new() { Name = "Slack", Icon = "S", Enabled = false, Fields = new() { new("Webhook URL", "text", "https://hooks.slack.com/services/...") } },
+        new() { Name = "Email", Icon = "@", Enabled = false, Fields = new() { new("SMTP Host", "text", "smtp.gmail.com"), new("Port", "number", "587"), new("Username", "text", ""), new("Password", "password", ""), new("From", "email", ""), new("To", "email", "") } }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        // TODO: Load from API
+        settings = new SettingsModel
+        {
+            Port = 5000,
+            ExternalUrl = "http://localhost:5000",
+            DataDir = "/var/lib/xcluadeagent",
+            AutoSync = true,
+            CreateBackups = true,
+            BackupRetentionDays = 7,
+            AiEnabled = true,
+            AiMode = "suggest",
+            AiProvider = "ollama",
+            OllamaEndpoint = "http://localhost:11434",
+            OllamaModel = "qwen2.5-coder:7b",
+            AiBudgetEnabled = false,
+            AiBudgetLimit = 10,
+            AiBudgetUsed = 0,
+            SessionTimeout = 60,
+            Require2FA = false,
+            ApiEnabled = true,
+            RateLimit = 60
+        };
+    }
+
+    private async Task SaveSettings()
+    {
+        // TODO: Save to API
+    }
+
+    private void ResetSettings()
+    {
+        // TODO: Reset to defaults
+    }
+
+    private void GenerateSecret()
+    {
+        settings.WebhookSecret = Guid.NewGuid().ToString("N");
+    }
+
+    private class SettingsModel
+    {
+        public int Port { get; set; }
+        public string ExternalUrl { get; set; } = "";
+        public string DataDir { get; set; } = "";
+        public bool AutoSync { get; set; }
+        public bool CreateBackups { get; set; }
+        public int BackupRetentionDays { get; set; }
+        public string? GitHubToken { get; set; }
+        public string? WebhookSecret { get; set; }
+        public bool AiEnabled { get; set; }
+        public string AiMode { get; set; } = "off";
+        public string AiProvider { get; set; } = "ollama";
+        public string? OllamaEndpoint { get; set; }
+        public string? OllamaModel { get; set; }
+        public string? ClaudeApiKey { get; set; }
+        public string? ClaudeModel { get; set; }
+        public string? OpenAiApiKey { get; set; }
+        public string? OpenAiModel { get; set; }
+        public bool AiBudgetEnabled { get; set; }
+        public decimal AiBudgetLimit { get; set; }
+        public decimal AiBudgetUsed { get; set; }
+        public int SessionTimeout { get; set; }
+        public bool Require2FA { get; set; }
+        public bool ApiEnabled { get; set; }
+        public int RateLimit { get; set; }
+    }
+
+    private class AiModeOption
+    {
+        public string Key { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Risk { get; set; } = "";
+        public string RiskClass { get; set; } = "";
+    }
+
+    private class NotificationChannel
+    {
+        public string Name { get; set; } = "";
+        public string Icon { get; set; } = "";
+        public bool Enabled { get; set; }
+        public List<FieldDef> Fields { get; set; } = new();
+    }
+
+    private class FieldDef
+    {
+        public string Label { get; set; }
+        public string Type { get; set; }
+        public string Placeholder { get; set; }
+        public string? Value { get; set; }
+
+        public FieldDef(string label, string type, string placeholder)
+        {
+            Label = label;
+            Type = type;
+            Placeholder = placeholder;
+        }
+    }
+}
