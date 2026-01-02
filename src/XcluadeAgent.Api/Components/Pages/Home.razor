@@ -224,7 +224,6 @@
 
 @code {
     private DashboardOverviewDto? overview;
-    private bool loading = true;
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -236,7 +235,6 @@
     {
         try
         {
-            loading = true;
             errorMessage = null;
 
             var response = await Http.GetFromJsonAsync<ApiResponse<DashboardOverviewDto>>("api/v1/dashboard/overview");
@@ -289,10 +287,6 @@
         {
             errorMessage = $"Unexpected error: {ex.Message}";
             overview = CreateEmptyOverview();
-        }
-        finally
-        {
-            loading = false;
         }
     }
 

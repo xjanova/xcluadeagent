@@ -173,7 +173,6 @@
 @code {
     private LicenseInfo license = new();
     private string newLicenseKey = "";
-    private bool showUpgradeModal = false;
 
     private List<Feature> features = new();
     private List<Plan> plans = new();
@@ -242,7 +241,7 @@
 
     private void ShowUpgrade()
     {
-        showUpgradeModal = true;
+        // TODO: Implement upgrade modal
     }
 
     private async Task ActivateLicense()
