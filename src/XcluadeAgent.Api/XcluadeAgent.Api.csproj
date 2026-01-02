@@ -25,9 +25,6 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
     <PackageReference Include="Microsoft.OpenApi" Version="1.6.23" />
 
-    <!-- Real-time -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />
-
     <!-- Blazor -->
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.22" />
 
