@@ -10,18 +10,18 @@ var rootCommand = new RootCommand("XcluadeAgent CLI - GitHub Sync Service Contro
 
 // Configuration
 var apiUrlOption = new Option<string>(
-    name: "--api",
-    description: "API URL",
-    getDefaultValue: () => "http://localhost:5000");
-apiUrlOption.AddAlias("-a");
+    aliases: ["--api", "-a"],
+    description: "API URL")
+{
+    DefaultValueFactory = _ => "http://localhost:5000"
+};
 
 var tokenOption = new Option<string?>(
-    name: "--token",
+    aliases: ["--token", "-t"],
     description: "JWT authentication token");
-tokenOption.AddAlias("-t");
 
-rootCommand.AddGlobalOption(apiUrlOption);
-rootCommand.AddGlobalOption(tokenOption);
+rootCommand.Options.Add(apiUrlOption);
+rootCommand.Options.Add(tokenOption);
 
 // Status command
 var statusCommand = new Command("status", "Show system status");
@@ -57,7 +57,7 @@ statusCommand.SetAction(async (parseResult, cancellationToken) =>
             }
         });
 });
-rootCommand.AddCommand(statusCommand);
+rootCommand.Subcommands.Add(statusCommand);
 
 // List projects command
 var listCommand = new Command("list", "List all projects");
@@ -112,14 +112,14 @@ listCommand.SetAction(async (parseResult, cancellationToken) =>
             }
         });
 });
-rootCommand.AddCommand(listCommand);
+rootCommand.Subcommands.Add(listCommand);
 
 // Sync command
 var syncCommand = new Command("sync", "Sync a project");
 var projectArg = new Argument<string>("project", "Project name or ID");
 var dryRunOption = new Option<bool>("--dry-run", "Preview changes without applying");
-syncCommand.AddArgument(projectArg);
-syncCommand.AddOption(dryRunOption);
+syncCommand.Arguments.Add(projectArg);
+syncCommand.Options.Add(dryRunOption);
 
 syncCommand.SetAction(async (parseResult, cancellationToken) =>
 {
@@ -162,14 +162,14 @@ syncCommand.SetAction(async (parseResult, cancellationToken) =>
             }
         });
 });
-rootCommand.AddCommand(syncCommand);
+rootCommand.Subcommands.Add(syncCommand);
 
 // Rollback command
 var rollbackCommand = new Command("rollback", "Rollback a project");
 var rollbackProjectArg = new Argument<string>("project", "Project name or ID");
-rollbackCommand.AddArgument(rollbackProjectArg);
+rollbackCommand.Arguments.Add(rollbackProjectArg);
 var versionOption = new Option<string?>("--version", "Version to rollback to");
-rollbackCommand.AddOption(versionOption);
+rollbackCommand.Options.Add(versionOption);
 
 rollbackCommand.SetAction(async (parseResult, cancellationToken) =>
 {
@@ -205,7 +205,7 @@ rollbackCommand.SetAction(async (parseResult, cancellationToken) =>
         AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
     }
 });
-rootCommand.AddCommand(rollbackCommand);
+rootCommand.Subcommands.Add(rollbackCommand);
 
 // Login command
 var loginCommand = new Command("login", "Login to get authentication token");
@@ -242,7 +242,7 @@ loginCommand.SetAction(async (parseResult, cancellationToken) =>
         AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
     }
 });
-rootCommand.AddCommand(loginCommand);
+rootCommand.Subcommands.Add(loginCommand);
 
 // Version command
 var versionCommand = new Command("version", "Show version information");
@@ -252,7 +252,7 @@ versionCommand.SetAction((parseResult, cancellationToken) =>
     AnsiConsole.MarkupLine("XcluadeAgent CLI v1.0.0");
     AnsiConsole.MarkupLine("[grey]Developed by xman studio | https://xman4289.com[/]");
 });
-rootCommand.AddCommand(versionCommand);
+rootCommand.Subcommands.Add(versionCommand);
 
 return await rootCommand.InvokeAsync(args);
 
