@@ -32,7 +32,7 @@ public class ProjectsControllerTests
             CreateProject("project-2"),
             CreateProject("project-3")
         };
-        _projectRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(projects);
+        _projectRepoMock.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(projects);
 
         // Act
         var result = await GetProjectsAsync();
@@ -48,7 +48,7 @@ public class ProjectsControllerTests
         // Arrange
         var projectId = Guid.NewGuid();
         var project = CreateProject("my-project", projectId);
-        _projectRepoMock.Setup(r => r.GetByIdAsync(projectId)).ReturnsAsync(project);
+        _projectRepoMock.Setup(r => r.GetByIdAsync(projectId, It.IsAny<CancellationToken>())).ReturnsAsync(project);
 
         // Act
         var result = await GetProjectByIdAsync(projectId);
@@ -63,7 +63,7 @@ public class ProjectsControllerTests
     {
         // Arrange
         var projectId = Guid.NewGuid();
-        _projectRepoMock.Setup(r => r.GetByIdAsync(projectId)).ReturnsAsync((Project?)null);
+        _projectRepoMock.Setup(r => r.GetByIdAsync(projectId, It.IsAny<CancellationToken>())).ReturnsAsync((Project?)null);
 
         // Act
         var result = await GetProjectByIdAsync(projectId);
@@ -139,7 +139,7 @@ public class ProjectsControllerTests
         // Arrange
         var project = CreateProject("sync-project");
         project.Enabled = true;
-        _projectRepoMock.Setup(r => r.GetByIdAsync(project.Id)).ReturnsAsync(project);
+        _projectRepoMock.Setup(r => r.GetByIdAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(project);
         _syncServiceMock.Setup(s => s.SyncAsync(project.Id, It.IsAny<SyncTrigger>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SyncResult { Success = true });
 
@@ -156,7 +156,7 @@ public class ProjectsControllerTests
         // Arrange
         var project = CreateProject("disabled-project");
         project.Enabled = false;
-        _projectRepoMock.Setup(r => r.GetByIdAsync(project.Id)).ReturnsAsync(project);
+        _projectRepoMock.Setup(r => r.GetByIdAsync(project.Id, It.IsAny<CancellationToken>())).ReturnsAsync(project);
 
         // Act
         var result = await TriggerSyncAsync(project.Id);
