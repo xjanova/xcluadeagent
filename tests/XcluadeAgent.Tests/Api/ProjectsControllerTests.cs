@@ -184,13 +184,13 @@ public class ProjectsControllerTests
 
     private async Task<List<ProjectDto>> GetProjectsAsync()
     {
-        var projects = await _projectRepoMock.Object.GetAllAsync();
+        var projects = await _projectRepoMock.Object.GetAllAsync(default);
         return projects.Select(MapToDto).ToList();
     }
 
     private async Task<ProjectDto?> GetProjectByIdAsync(Guid id)
     {
-        var project = await _projectRepoMock.Object.GetByIdAsync(id);
+        var project = await _projectRepoMock.Object.GetByIdAsync(id, default);
         return project != null ? MapToDto(project) : null;
     }
 
@@ -243,7 +243,7 @@ public class ProjectsControllerTests
 
     private async Task<bool> TriggerSyncAsync(Guid projectId)
     {
-        var project = await _projectRepoMock.Object.GetByIdAsync(projectId);
+        var project = await _projectRepoMock.Object.GetByIdAsync(projectId, default);
         if (project == null || !project.Enabled)
             return false;
 
