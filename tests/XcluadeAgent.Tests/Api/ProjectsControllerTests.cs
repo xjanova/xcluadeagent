@@ -1,7 +1,6 @@
 using FluentAssertions;
 using Moq;
 using Xunit;
-using Microsoft.Extensions.Logging;
 using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
@@ -13,13 +12,11 @@ public class ProjectsControllerTests
 {
     private readonly Mock<IProjectRepository> _projectRepoMock;
     private readonly Mock<ISyncService> _syncServiceMock;
-    private readonly Mock<ILogger> _loggerMock;
 
     public ProjectsControllerTests()
     {
         _projectRepoMock = new Mock<IProjectRepository>();
         _syncServiceMock = new Mock<ISyncService>();
-        _loggerMock = new Mock<ILogger>();
     }
 
     [Fact]
