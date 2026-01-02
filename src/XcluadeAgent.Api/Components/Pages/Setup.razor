@@ -1,0 +1,618 @@
+@page "/setup"
+@using XcluadeAgent.Core.Models
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Initial Setup - XcluadeAgent</PageTitle>
+
+<div class="min-h-screen flex items-center justify-center bg-gray-900 p-4">
+    <div class="w-full max-w-4xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="text-4xl mb-2">#</div>
+            <h1 class="text-3xl font-bold">XcluadeAgent Setup</h1>
+            <p class="text-gray-400 mt-2">Let's configure your sync agent</p>
+        </div>
+
+        <!-- Progress Steps -->
+        <div class="flex justify-center mb-8">
+            @foreach (var (step, index) in steps.Select((s, i) => (s, i)))
+            {
+                <div class="flex items-center">
+                    <div class="flex flex-col items-center">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors
+                            @(index < currentStep ? "bg-green-500" : index == currentStep ? "bg-blue-500" : "bg-gray-700")">
+                            @if (index < currentStep)
+                            {
+                                <span>[+]</span>
+                            }
+                            else
+                            {
+                                <span>@(index + 1)</span>
+                            }
+                        </div>
+                        <span class="text-xs mt-1 @(index <= currentStep ? "" : "text-gray-500")">@step</span>
+                    </div>
+                    @if (index < steps.Length - 1)
+                    {
+                        <div class="w-16 h-0.5 mx-2 @(index < currentStep ? "bg-green-500" : "bg-gray-700")"></div>
+                    }
+                </div>
+            }
+        </div>
+
+        <!-- Content Card -->
+        <div class="card">
+            <!-- Step 1: System Scan -->
+            @if (currentStep == 0)
+            {
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold mb-2">System Scan</h2>
+                    <p class="text-gray-400 mb-6">Analyzing your server environment</p>
+
+                    @if (isScanning)
+                    {
+                        <div class="flex flex-col items-center py-12">
+                            <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mb-4"></div>
+                            <p class="text-lg">@scanStatus</p>
+                            <p class="text-sm text-gray-500 mt-2">This may take a moment...</p>
+                        </div>
+                    }
+                    else if (systemInfo != null)
+                    {
+                        <div class="space-y-6">
+                            <!-- OS Info -->
+                            <div class="p-4 bg-gray-800 rounded-lg">
+                                <h3 class="font-semibold mb-3">Operating System</h3>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span class="text-gray-400">OS:</span>
+                                        <span class="ml-2">@systemInfo.OsName</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Version:</span>
+                                        <span class="ml-2">@systemInfo.OsVersion</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Kernel:</span>
+                                        <span class="ml-2">@systemInfo.Kernel</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400">Architecture:</span>
+                                        <span class="ml-2">@systemInfo.Architecture</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Root Status -->
+                            <div class="p-4 rounded-lg @(systemInfo.IsRoot ? "bg-green-500/10 border border-green-500/30" : "bg-red-500/10 border border-red-500/30")">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-xl">@(systemInfo.IsRoot ? "[+]" : "[!]")</span>
+                                    <span class="font-semibold">@(systemInfo.IsRoot ? "Running as root" : "NOT running as root!")</span>
+                                </div>
+                                @if (!systemInfo.IsRoot)
+                                {
+                                    <p class="text-sm text-gray-400 mt-2">
+                                        Some features may not work correctly. Please reinstall with sudo.
+                                    </p>
+                                }
+                            </div>
+
+                            <!-- Web Servers -->
+                            <div class="p-4 bg-gray-800 rounded-lg">
+                                <h3 class="font-semibold mb-3">Detected Web Servers</h3>
+                                @if (systemInfo.DetectedWebServers.Any())
+                                {
+                                    <div class="space-y-2">
+                                        @foreach (var server in systemInfo.DetectedWebServers)
+                                        {
+                                            <div class="flex items-center justify-between p-2 bg-gray-700/50 rounded">
+                                                <div class="flex items-center space-x-3">
+                                                    <span class="w-2 h-2 rounded-full @(server.IsRunning ? "bg-green-500" : "bg-gray-500")"></span>
+                                                    <span class="font-medium">@server.Name</span>
+                                                    <span class="text-sm text-gray-400">v@server.Version</span>
+                                                </div>
+                                                <div class="flex items-center space-x-4 text-sm">
+                                                    <span class="text-gray-400">User: @server.RunAsUser</span>
+                                                    @if (server.ListeningPorts.Any())
+                                                    {
+                                                        <span class="text-gray-400">Ports: @string.Join(", ", server.ListeningPorts)</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-gray-500">No web server detected</p>
+                                }
+                            </div>
+
+                            <!-- Discovered Sites -->
+                            <div class="p-4 bg-gray-800 rounded-lg">
+                                <h3 class="font-semibold mb-3">Discovered Sites (@systemInfo.DiscoveredSites.Count)</h3>
+                                @if (systemInfo.DiscoveredSites.Any())
+                                {
+                                    <div class="max-h-48 overflow-y-auto space-y-2">
+                                        @foreach (var site in systemInfo.DiscoveredSites.Take(10))
+                                        {
+                                            <div class="flex items-center justify-between p-2 bg-gray-700/50 rounded text-sm">
+                                                <div>
+                                                    <span class="font-medium">@site.Domain</span>
+                                                    <span class="text-gray-500 ml-2">@site.DocumentRoot</span>
+                                                </div>
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="px-2 py-0.5 rounded text-xs bg-gray-600">@site.DetectedFramework</span>
+                                                    <span class="px-2 py-0.5 rounded text-xs @GetEnvClass(site.Environment)">@site.Environment</span>
+                                                    <span class="text-gray-400">@site.OwnerUser:@site.OwnerGroup</span>
+                                                </div>
+                                            </div>
+                                        }
+                                        @if (systemInfo.DiscoveredSites.Count > 10)
+                                        {
+                                            <p class="text-sm text-gray-500 text-center">
+                                                ...and @(systemInfo.DiscoveredSites.Count - 10) more
+                                            </p>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-gray-500">No sites discovered</p>
+                                }
+                            </div>
+
+                            <!-- Conflicts -->
+                            @if (systemInfo.Conflicts.Any())
+                            {
+                                <div class="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                                    <h3 class="font-semibold mb-3 text-yellow-400">Conflicts Detected (@systemInfo.Conflicts.Count)</h3>
+                                    <div class="space-y-2">
+                                        @foreach (var conflict in systemInfo.Conflicts)
+                                        {
+                                            <div class="p-2 bg-gray-800 rounded text-sm">
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="text-@(GetSeverityColor(conflict.Severity))-500">[!]</span>
+                                                    <span class="font-medium">@conflict.Title</span>
+                                                </div>
+                                                <p class="text-gray-400 mt-1">@conflict.Description</p>
+                                                @if (!string.IsNullOrEmpty(conflict.AiRecommendation))
+                                                {
+                                                    <div class="mt-2 p-2 bg-blue-500/10 rounded text-xs">
+                                                        <span class="text-blue-400">AI Recommendation:</span>
+                                                        <span class="text-gray-300 ml-1">@conflict.AiRecommendation</span>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-12">
+                            <p class="text-gray-400 mb-4">Ready to scan your system</p>
+                            <button class="btn-primary" @onclick="StartScan">Start Scan</button>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Step 2: Import Sites -->
+            @if (currentStep == 1)
+            {
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold mb-2">Import Sites</h2>
+                    <p class="text-gray-400 mb-6">Select sites to manage with XcluadeAgent</p>
+
+                    <div class="space-y-4">
+                        @foreach (var site in systemInfo?.DiscoveredSites ?? new List<DiscoveredSite>())
+                        {
+                            <div class="p-4 border border-gray-700 rounded-lg hover:border-blue-500 transition-colors">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex items-start space-x-3">
+                                        <input type="checkbox" class="mt-1 w-5 h-5"
+                                               @bind="selectedSites[site.Id]" />
+                                        <div>
+                                            <h3 class="font-semibold">@site.Domain</h3>
+                                            <p class="text-sm text-gray-400">@site.DocumentRoot</p>
+                                            <div class="flex items-center space-x-2 mt-2">
+                                                <span class="px-2 py-0.5 rounded text-xs bg-gray-600">@site.DetectedFramework</span>
+                                                @if (site.HasGitRepo)
+                                                {
+                                                    <span class="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400">Git</span>
+                                                }
+                                                @if (site.HasSsl)
+                                                {
+                                                    <span class="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">SSL</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right text-sm">
+                                        <p class="text-gray-400">Owner: @site.OwnerUser:@site.OwnerGroup</p>
+                                        @if (!string.IsNullOrEmpty(site.GitRemoteUrl))
+                                        {
+                                            <p class="text-blue-400 text-xs mt-1">@site.GitRemoteUrl</p>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mt-6 p-4 bg-gray-800 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <span>Selected: @selectedSites.Count(x => x.Value) sites</span>
+                            <div class="space-x-2">
+                                <button class="btn-ghost text-sm" @onclick="SelectAllSites">Select All</button>
+                                <button class="btn-ghost text-sm" @onclick="DeselectAllSites">Deselect All</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 3: GitHub -->
+            @if (currentStep == 2)
+            {
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold mb-2">GitHub Integration</h2>
+                    <p class="text-gray-400 mb-6">Connect to your GitHub account</p>
+
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Personal Access Token</label>
+                            <input type="password" class="input w-full" @bind="githubToken"
+                                   placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
+                            <p class="text-xs text-gray-500 mt-1">
+                                Required scopes: repo, read:packages
+                            </p>
+                        </div>
+
+                        <div class="p-4 bg-gray-800 rounded-lg">
+                            <h3 class="font-semibold mb-2">How to create a token:</h3>
+                            <ol class="list-decimal list-inside text-sm text-gray-400 space-y-1">
+                                <li>Go to GitHub Settings -> Developer settings -> Personal access tokens</li>
+                                <li>Click "Generate new token (classic)"</li>
+                                <li>Select scopes: repo, read:packages</li>
+                                <li>Copy the token and paste it above</li>
+                            </ol>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(githubToken))
+                        {
+                            <button class="btn-secondary" @onclick="TestGitHubConnection">
+                                Test Connection
+                            </button>
+                            @if (githubConnected)
+                            {
+                                <span class="ml-3 text-green-500">[+] Connected!</span>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Step 4: Admin Account -->
+            @if (currentStep == 3)
+            {
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold mb-2">Admin Account</h2>
+                    <p class="text-gray-400 mb-6">Create your administrator account</p>
+
+                    <div class="space-y-4 max-w-md">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Username</label>
+                            <input type="text" class="input w-full" @bind="adminUsername" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Email</label>
+                            <input type="email" class="input w-full" @bind="adminEmail" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Password</label>
+                            <input type="password" class="input w-full" @bind="adminPassword" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Confirm Password</label>
+                            <input type="password" class="input w-full" @bind="adminPasswordConfirm" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 5: Review -->
+            @if (currentStep == 4)
+            {
+                <div class="p-8">
+                    <h2 class="text-2xl font-bold mb-2">Review & Complete</h2>
+                    <p class="text-gray-400 mb-6">Review your configuration</p>
+
+                    <div class="space-y-4">
+                        <div class="p-4 bg-gray-800 rounded-lg">
+                            <h3 class="font-semibold mb-2">System</h3>
+                            <p class="text-sm text-gray-400">@systemInfo?.OsName @systemInfo?.OsVersion</p>
+                            <p class="text-sm text-gray-400">Web Server: @systemInfo?.WebServer?.Name</p>
+                        </div>
+
+                        <div class="p-4 bg-gray-800 rounded-lg">
+                            <h3 class="font-semibold mb-2">Sites to Import</h3>
+                            <p class="text-sm text-gray-400">@selectedSites.Count(x => x.Value) sites selected</p>
+                        </div>
+
+                        <div class="p-4 bg-gray-800 rounded-lg">
+                            <h3 class="font-semibold mb-2">GitHub</h3>
+                            <p class="text-sm text-gray-400">@(githubConnected ? "Connected" : "Not connected")</p>
+                        </div>
+
+                        <div class="p-4 bg-gray-800 rounded-lg">
+                            <h3 class="font-semibold mb-2">Admin Account</h3>
+                            <p class="text-sm text-gray-400">@adminUsername (@adminEmail)</p>
+                        </div>
+                    </div>
+
+                    @if (isCompleting)
+                    {
+                        <div class="mt-6 text-center">
+                            <div class="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                            <p>Completing setup...</p>
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- Navigation -->
+            <div class="p-6 border-t border-gray-700 flex justify-between">
+                @if (currentStep > 0)
+                {
+                    <button class="btn-secondary" @onclick="PreviousStep">Previous</button>
+                }
+                else
+                {
+                    <div></div>
+                }
+
+                @if (currentStep < steps.Length - 1)
+                {
+                    <button class="btn-primary" @onclick="NextStep" disabled="@(!CanProceed())">
+                        Next
+                    </button>
+                }
+                else
+                {
+                    <button class="btn-primary" @onclick="CompleteSetup" disabled="@(!CanProceed() || isCompleting)">
+                        Complete Setup
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-6 text-sm text-gray-500">
+            XcluadeAgent by xman studio | xman4289.com
+        </div>
+    </div>
+</div>
+
+@code {
+    private string[] steps = { "Scan", "Import", "GitHub", "Admin", "Review" };
+    private int currentStep = 0;
+
+    private bool isScanning = false;
+    private string scanStatus = "";
+    private SystemInfo? systemInfo;
+
+    private Dictionary<Guid, bool> selectedSites = new();
+    private string githubToken = "";
+    private bool githubConnected = false;
+
+    private string adminUsername = "admin";
+    private string adminEmail = "";
+    private string adminPassword = "";
+    private string adminPasswordConfirm = "";
+
+    private bool isCompleting = false;
+
+    private async Task StartScan()
+    {
+        isScanning = true;
+
+        try
+        {
+            scanStatus = "Detecting operating system...";
+            StateHasChanged();
+            await Task.Delay(500);
+
+            scanStatus = "Scanning for web servers...";
+            StateHasChanged();
+            await Task.Delay(1000);
+
+            scanStatus = "Discovering websites...";
+            StateHasChanged();
+            await Task.Delay(1500);
+
+            scanStatus = "Analyzing permissions...";
+            StateHasChanged();
+            await Task.Delay(1000);
+
+            scanStatus = "Checking for conflicts...";
+            StateHasChanged();
+            await Task.Delay(1000);
+
+            // TODO: Call actual API
+            // systemInfo = await Http.GetFromJsonAsync<SystemInfo>("api/v1/system/scan");
+
+            // Mock data for now
+            systemInfo = CreateMockSystemInfo();
+
+            // Initialize selected sites
+            foreach (var site in systemInfo.DiscoveredSites)
+            {
+                selectedSites[site.Id] = site.HasGitRepo;
+            }
+        }
+        finally
+        {
+            isScanning = false;
+        }
+    }
+
+    private SystemInfo CreateMockSystemInfo()
+    {
+        return new SystemInfo
+        {
+            Hostname = "web-server-01",
+            OsName = "Ubuntu",
+            OsVersion = "22.04 LTS",
+            Kernel = "5.15.0-91-generic",
+            Architecture = "X64",
+            IsRoot = true,
+            CurrentUserId = 0,
+            CurrentUsername = "root",
+            DetectedWebServers = new List<WebServerInfo>
+            {
+                new()
+                {
+                    Type = WebServerType.Nginx,
+                    Name = "Nginx",
+                    Version = "1.18.0",
+                    IsRunning = true,
+                    RunAsUser = "www-data",
+                    RunAsGroup = "www-data",
+                    ListeningPorts = new List<int> { 80, 443 }
+                }
+            },
+            DiscoveredSites = new List<DiscoveredSite>
+            {
+                new()
+                {
+                    Domain = "example.com",
+                    DocumentRoot = "/var/www/example",
+                    DetectedFramework = Core.Enums.FrameworkType.Laravel,
+                    Environment = SiteEnvironment.Production,
+                    OwnerUser = "admin",
+                    OwnerGroup = "admin",
+                    HasGitRepo = true,
+                    GitRemoteUrl = "git@github.com:xjanova/example.git",
+                    HasSsl = true
+                },
+                new()
+                {
+                    Domain = "api.example.com",
+                    DocumentRoot = "/var/www/api",
+                    DetectedFramework = Core.Enums.FrameworkType.NodeJs,
+                    Environment = SiteEnvironment.Production,
+                    OwnerUser = "admin",
+                    OwnerGroup = "admin",
+                    HasGitRepo = true,
+                    HasSsl = true
+                },
+                new()
+                {
+                    Domain = "staging.example.com",
+                    DocumentRoot = "/var/www/staging",
+                    DetectedFramework = Core.Enums.FrameworkType.Laravel,
+                    Environment = SiteEnvironment.Staging,
+                    OwnerUser = "www-data",
+                    OwnerGroup = "www-data",
+                    HasGitRepo = false,
+                    HasSsl = false
+                }
+            },
+            DetectedEnvironment = EnvironmentType.Production
+        };
+    }
+
+    private void NextStep()
+    {
+        if (CanProceed() && currentStep < steps.Length - 1)
+        {
+            currentStep++;
+        }
+    }
+
+    private void PreviousStep()
+    {
+        if (currentStep > 0)
+        {
+            currentStep--;
+        }
+    }
+
+    private bool CanProceed()
+    {
+        return currentStep switch
+        {
+            0 => systemInfo != null,
+            1 => selectedSites.Any(x => x.Value),
+            2 => true, // GitHub is optional
+            3 => !string.IsNullOrEmpty(adminUsername) &&
+                 !string.IsNullOrEmpty(adminPassword) &&
+                 adminPassword == adminPasswordConfirm,
+            4 => true,
+            _ => false
+        };
+    }
+
+    private async Task TestGitHubConnection()
+    {
+        // TODO: Call API
+        githubConnected = !string.IsNullOrEmpty(githubToken);
+    }
+
+    private void SelectAllSites()
+    {
+        foreach (var site in systemInfo?.DiscoveredSites ?? new List<DiscoveredSite>())
+        {
+            selectedSites[site.Id] = true;
+        }
+    }
+
+    private void DeselectAllSites()
+    {
+        foreach (var key in selectedSites.Keys.ToList())
+        {
+            selectedSites[key] = false;
+        }
+    }
+
+    private async Task CompleteSetup()
+    {
+        isCompleting = true;
+        StateHasChanged();
+
+        try
+        {
+            // TODO: Call API to complete setup
+            await Task.Delay(2000);
+
+            // Redirect to dashboard
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            isCompleting = false;
+        }
+    }
+
+    private string GetEnvClass(SiteEnvironment env) => env switch
+    {
+        SiteEnvironment.Production => "bg-red-500/20 text-red-400",
+        SiteEnvironment.Staging => "bg-yellow-500/20 text-yellow-400",
+        SiteEnvironment.Development => "bg-blue-500/20 text-blue-400",
+        SiteEnvironment.Local => "bg-green-500/20 text-green-400",
+        _ => "bg-gray-500/20 text-gray-400"
+    };
+
+    private string GetSeverityColor(ConflictSeverity severity) => severity switch
+    {
+        ConflictSeverity.Critical => "red",
+        ConflictSeverity.Error => "red",
+        ConflictSeverity.Warning => "yellow",
+        _ => "blue"
+    };
+}

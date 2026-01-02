@@ -33,11 +33,28 @@ echo "║     Website: https://xman4289.com                                  ║
 echo "╚═══════════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# Check if running as root
+# CRITICAL: Must run as root
+# XcluadeAgent requires root privileges for:
+# - Scanning web server configurations
+# - Managing file permissions across all web directories
+# - Setting correct ownership for web server access
+# - Installing dependencies and system services
 if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}Please run as root (sudo)${NC}"
+    echo -e "${RED}╔═══════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${RED}║  ERROR: Root privileges required                                   ║${NC}"
+    echo -e "${RED}╠═══════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${RED}║  XcluadeAgent MUST be installed as root to:                        ║${NC}"
+    echo -e "${RED}║  • Scan and detect web server configurations                       ║${NC}"
+    echo -e "${RED}║  • Access all web directories regardless of ownership              ║${NC}"
+    echo -e "${RED}║  • Manage file permissions without access errors                   ║${NC}"
+    echo -e "${RED}║  • Install system services and dependencies                        ║${NC}"
+    echo -e "${RED}║                                                                    ║${NC}"
+    echo -e "${RED}║  Run with: sudo ./install.sh                                       ║${NC}"
+    echo -e "${RED}╚═══════════════════════════════════════════════════════════════════╝${NC}"
     exit 1
 fi
+
+echo -e "${GREEN}✓ Running as root${NC}"
 
 # Detect OS
 if [ -f /etc/os-release ]; then
@@ -50,6 +67,172 @@ else
 fi
 
 echo -e "${GREEN}Detected: $OS $VERSION${NC}"
+
+# =============================================================================
+# SYSTEM SCANNING - Detect existing web servers and sites
+# =============================================================================
+echo ""
+echo -e "${BLUE}=== Scanning System Environment ===${NC}"
+echo ""
+
+# Function to detect web servers
+detect_web_servers() {
+    local servers=""
+
+    # Check Nginx
+    if command -v nginx &> /dev/null || [ -f /etc/nginx/nginx.conf ]; then
+        NGINX_VERSION=$(nginx -v 2>&1 | grep -oP 'nginx/\K[\d.]+' || echo "installed")
+        NGINX_RUNNING=$(systemctl is-active nginx 2>/dev/null || echo "inactive")
+        servers="${servers}nginx:${NGINX_VERSION}:${NGINX_RUNNING} "
+        echo -e "  ${GREEN}✓ Nginx${NC} v${NGINX_VERSION} (${NGINX_RUNNING})"
+    fi
+
+    # Check Apache
+    if command -v apache2 &> /dev/null || command -v httpd &> /dev/null || [ -f /etc/apache2/apache2.conf ]; then
+        APACHE_VERSION=$(apache2 -v 2>&1 | head -1 | grep -oP 'Apache/\K[\d.]+' || echo "installed")
+        APACHE_RUNNING=$(systemctl is-active apache2 2>/dev/null || systemctl is-active httpd 2>/dev/null || echo "inactive")
+        servers="${servers}apache:${APACHE_VERSION}:${APACHE_RUNNING} "
+        echo -e "  ${GREEN}✓ Apache${NC} v${APACHE_VERSION} (${APACHE_RUNNING})"
+    fi
+
+    # Check Caddy
+    if command -v caddy &> /dev/null || [ -f /etc/caddy/Caddyfile ]; then
+        CADDY_VERSION=$(caddy version 2>&1 | grep -oP 'v[\d.]+' || echo "installed")
+        CADDY_RUNNING=$(systemctl is-active caddy 2>/dev/null || echo "inactive")
+        servers="${servers}caddy:${CADDY_VERSION}:${CADDY_RUNNING} "
+        echo -e "  ${GREEN}✓ Caddy${NC} ${CADDY_VERSION} (${CADDY_RUNNING})"
+    fi
+
+    # Check LiteSpeed/OpenLiteSpeed
+    if [ -d /usr/local/lsws ]; then
+        LSWS_RUNNING=$(systemctl is-active lsws 2>/dev/null || echo "inactive")
+        servers="${servers}litespeed:unknown:${LSWS_RUNNING} "
+        echo -e "  ${GREEN}✓ LiteSpeed${NC} (${LSWS_RUNNING})"
+    fi
+
+    if [ -z "$servers" ]; then
+        echo -e "  ${YELLOW}No web server detected${NC}"
+    fi
+
+    echo "$servers"
+}
+
+# Function to scan web sites
+scan_websites() {
+    local sites_found=0
+
+    # Scan Nginx sites
+    if [ -d /etc/nginx/sites-enabled ]; then
+        for conf in /etc/nginx/sites-enabled/*; do
+            if [ -f "$conf" ]; then
+                # Extract server_name and root
+                SERVER_NAME=$(grep -oP 'server_name\s+\K[^;]+' "$conf" 2>/dev/null | head -1)
+                DOC_ROOT=$(grep -oP 'root\s+\K[^;]+' "$conf" 2>/dev/null | head -1)
+                if [ -n "$DOC_ROOT" ] && [ -d "$DOC_ROOT" ]; then
+                    OWNER=$(stat -c '%U:%G' "$DOC_ROOT" 2>/dev/null)
+                    echo -e "  ${BLUE}→${NC} ${SERVER_NAME:-unknown} | $DOC_ROOT | Owner: $OWNER"
+                    ((sites_found++))
+                fi
+            fi
+        done
+    fi
+
+    # Scan Apache sites
+    if [ -d /etc/apache2/sites-enabled ]; then
+        for conf in /etc/apache2/sites-enabled/*.conf; do
+            if [ -f "$conf" ]; then
+                SERVER_NAME=$(grep -oP 'ServerName\s+\K\S+' "$conf" 2>/dev/null | head -1)
+                DOC_ROOT=$(grep -oP 'DocumentRoot\s+\K[^\s"]+' "$conf" 2>/dev/null | head -1)
+                if [ -n "$DOC_ROOT" ] && [ -d "$DOC_ROOT" ]; then
+                    OWNER=$(stat -c '%U:%G' "$DOC_ROOT" 2>/dev/null)
+                    echo -e "  ${BLUE}→${NC} ${SERVER_NAME:-unknown} | $DOC_ROOT | Owner: $OWNER"
+                    ((sites_found++))
+                fi
+            fi
+        done
+    fi
+
+    # Also check common web directories
+    for webdir in /var/www/* /home/*/public_html /home/*/www; do
+        if [ -d "$webdir" ] && [ "$webdir" != "/var/www/html" ]; then
+            OWNER=$(stat -c '%U:%G' "$webdir" 2>/dev/null)
+            echo -e "  ${BLUE}→${NC} $webdir | Owner: $OWNER"
+            ((sites_found++))
+        fi
+    done
+
+    echo "$sites_found"
+}
+
+# Function to detect web server user
+detect_webserver_user() {
+    # Check Nginx user
+    if [ -f /etc/nginx/nginx.conf ]; then
+        NGINX_USER=$(grep -oP '^user\s+\K\w+' /etc/nginx/nginx.conf 2>/dev/null || echo "www-data")
+        echo "$NGINX_USER"
+        return
+    fi
+
+    # Check Apache user
+    if [ -f /etc/apache2/envvars ]; then
+        APACHE_USER=$(grep -oP 'APACHE_RUN_USER=\K\w+' /etc/apache2/envvars 2>/dev/null || echo "www-data")
+        echo "$APACHE_USER"
+        return
+    fi
+
+    echo "www-data"
+}
+
+echo -e "${YELLOW}Detecting web servers...${NC}"
+DETECTED_SERVERS=$(detect_web_servers)
+
+echo ""
+echo -e "${YELLOW}Scanning for websites...${NC}"
+SITES_COUNT=$(scan_websites)
+echo -e "  ${GREEN}Found ${SITES_COUNT} potential sites${NC}"
+
+echo ""
+WEB_USER=$(detect_webserver_user)
+echo -e "${YELLOW}Web server runs as:${NC} ${GREEN}${WEB_USER}${NC}"
+echo ""
+
+# Check for conflicts
+echo -e "${YELLOW}Checking for potential conflicts...${NC}"
+
+# Multiple web servers running
+RUNNING_SERVERS=$(echo "$DETECTED_SERVERS" | grep -o "active" | wc -l)
+if [ "$RUNNING_SERVERS" -gt 1 ]; then
+    echo -e "  ${RED}⚠ Warning: Multiple web servers are running!${NC}"
+    echo -e "    ${YELLOW}This may cause port conflicts. Consider stopping one.${NC}"
+fi
+
+# Check port 80/443 usage
+if ss -tlnp 2>/dev/null | grep -q ":80 "; then
+    PROCESS_80=$(ss -tlnp 2>/dev/null | grep ":80 " | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
+    echo -e "  ${GREEN}✓ Port 80 in use by: ${PROCESS_80}${NC}"
+fi
+
+if ss -tlnp 2>/dev/null | grep -q ":443 "; then
+    PROCESS_443=$(ss -tlnp 2>/dev/null | grep ":443 " | grep -oP 'users:\(\("\K[^"]+' || echo "unknown")
+    echo -e "  ${GREEN}✓ Port 443 in use by: ${PROCESS_443}${NC}"
+fi
+
+echo ""
+
+# Save detected info for the application
+SCAN_RESULT_FILE="/tmp/xcluadeagent_scan.json"
+cat > "$SCAN_RESULT_FILE" << SCANEOF
+{
+    "scannedAt": "$(date -Iseconds)",
+    "webServerUser": "${WEB_USER}",
+    "detectedServers": "${DETECTED_SERVERS}",
+    "sitesCount": ${SITES_COUNT:-0}
+}
+SCANEOF
+
+echo -e "${GREEN}System scan complete!${NC}"
+echo -e "  Scan results saved to: ${SCAN_RESULT_FILE}"
+echo ""
 
 # Interactive configuration
 echo ""
