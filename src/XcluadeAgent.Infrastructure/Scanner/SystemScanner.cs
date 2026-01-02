@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
 

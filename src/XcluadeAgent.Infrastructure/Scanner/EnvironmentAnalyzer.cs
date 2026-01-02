@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
 
