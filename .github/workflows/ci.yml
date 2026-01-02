@@ -54,19 +54,19 @@ jobs:
       run: dotnet publish src/XcluadeAgent.Worker/XcluadeAgent.Worker.csproj -c Release -o ./publish/worker
 
     - name: Upload API artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: xcluadeagent-api
         path: ./publish/api
 
     - name: Upload CLI artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: xcluadeagent-cli
         path: ./publish/cli
 
     - name: Upload Worker artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: xcluadeagent-worker
         path: ./publish/worker
