@@ -154,7 +154,7 @@ public class ConflictResolver : IConflictResolver
                         {
                             new()
                             {
-                                Id = $"install-{requiredRuntime.ToString().ToLower()}",
+                                Id = $"install-{requiredRuntime.Value.ToString().ToLower()}",
                                 Title = $"Install {requiredRuntime}",
                                 Description = GetInstallCommand(requiredRuntime.Value),
                                 IsRecommended = true,
