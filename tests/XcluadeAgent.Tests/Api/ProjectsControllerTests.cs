@@ -39,7 +39,7 @@ public class ProjectsControllerTests
 
         // Assert
         result.Should().HaveCount(3);
-        result.Select(p => p.Name).Should().Contain("project-1", "project-2", "project-3");
+        result.Select(p => p.Name).Should().Contain("project-1").And.Contain("project-2").And.Contain("project-3");
     }
 
     [Fact]
