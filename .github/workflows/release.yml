@@ -1,0 +1,128 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Get next version
+      id: version
+      run: |
+        # Get latest tag
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+
+        # Parse version
+        VERSION=${LATEST_TAG#v}
+        MAJOR=$(echo $VERSION | cut -d. -f1)
+        MINOR=$(echo $VERSION | cut -d. -f2)
+        PATCH=$(echo $VERSION | cut -d. -f3)
+
+        # Get commit messages since last tag
+        COMMITS=$(git log $LATEST_TAG..HEAD --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+        # Determine version bump based on conventional commits
+        if echo "$COMMITS" | grep -qE "^(BREAKING CHANGE|feat!|fix!):"; then
+          MAJOR=$((MAJOR + 1))
+          MINOR=0
+          PATCH=0
+        elif echo "$COMMITS" | grep -qE "^feat(\(.+\))?:"; then
+          MINOR=$((MINOR + 1))
+          PATCH=0
+        elif echo "$COMMITS" | grep -qE "^fix(\(.+\))?:"; then
+          PATCH=$((PATCH + 1))
+        else
+          # No conventional commits, bump patch
+          PATCH=$((PATCH + 1))
+        fi
+
+        NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+        echo "New version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "should_release=true" >> $GITHUB_OUTPUT
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+        if [ -z "$LATEST_TAG" ]; then
+          COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+        else
+          COMMITS=$(git log $LATEST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        fi
+
+        # Group commits by type
+        FEATURES=$(echo "$COMMITS" | grep -E "^- feat" || true)
+        FIXES=$(echo "$COMMITS" | grep -E "^- fix" || true)
+        OTHERS=$(echo "$COMMITS" | grep -vE "^- (feat|fix)" || true)
+
+        CHANGELOG=""
+
+        if [ -n "$FEATURES" ]; then
+          CHANGELOG="$CHANGELOG## 🚀 Features\n$FEATURES\n\n"
+        fi
+
+        if [ -n "$FIXES" ]; then
+          CHANGELOG="$CHANGELOG## 🐛 Bug Fixes\n$FIXES\n\n"
+        fi
+
+        if [ -n "$OTHERS" ]; then
+          CHANGELOG="$CHANGELOG## 📦 Other Changes\n$OTHERS\n\n"
+        fi
+
+        # Save to file for multiline output
+        echo -e "$CHANGELOG" > changelog.md
+        echo "Generated changelog"
+
+    - name: Create Release
+      if: steps.version.outputs.should_release == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Release ${{ steps.version.outputs.version }}
+        body_path: changelog.md
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update version in project files
+      if: steps.version.outputs.should_release == 'true'
+      run: |
+        VERSION=${{ steps.version.outputs.version }}
+        VERSION_NUMBER=${VERSION#v}
+
+        # Update version in csproj files if Version property exists
+        find . -name "*.csproj" -type f | while read file; do
+          if grep -q "<Version>" "$file"; then
+            sed -i "s/<Version>.*<\/Version>/<Version>$VERSION_NUMBER<\/Version>/" "$file"
+          fi
+        done
+
+        echo "Updated project versions to $VERSION_NUMBER"

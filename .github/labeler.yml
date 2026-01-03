@@ -1,0 +1,58 @@
+# Add 'api' label to any changes in the API project
+api:
+  - changed-files:
+    - any-glob-to-any-file: 'src/XcluadeAgent.Api/**/*'
+
+# Add 'core' label to any changes in the Core project
+core:
+  - changed-files:
+    - any-glob-to-any-file: 'src/XcluadeAgent.Core/**/*'
+
+# Add 'infrastructure' label to any changes in the Infrastructure project
+infrastructure:
+  - changed-files:
+    - any-glob-to-any-file: 'src/XcluadeAgent.Infrastructure/**/*'
+
+# Add 'worker' label to any changes in the Worker project
+worker:
+  - changed-files:
+    - any-glob-to-any-file: 'src/XcluadeAgent.Worker/**/*'
+
+# Add 'cli' label to any changes in the CLI project
+cli:
+  - changed-files:
+    - any-glob-to-any-file: 'src/XcluadeAgent.Cli/**/*'
+
+# Add 'tests' label to any changes in test files
+tests:
+  - changed-files:
+    - any-glob-to-any-file: 'tests/**/*'
+
+# Add 'documentation' label to docs changes
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**/*'
+
+# Add 'ci' label to workflow changes
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**/*'
+
+# Add 'docker' label to docker changes
+docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docker/**/*'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+
+# Add 'configuration' label to config changes
+configuration:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.csproj'
+      - '**/*.props'
+      - '**/*.targets'
+      - '*.sln'
