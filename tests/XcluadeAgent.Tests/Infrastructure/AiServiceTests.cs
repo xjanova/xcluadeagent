@@ -82,7 +82,7 @@ public class AiServiceTests
         prompt.Should().Contain(projectName);
         prompt.Should().Contain(errorLog);
         prompt.Should().Contain("Laravel");
-        prompt.Should().Contain("analyze");
+        prompt.Should().Contain("Analyze");
     }
 
     [Fact]
