@@ -1,0 +1,427 @@
+@page "/notifications"
+@using XcluadeAgent.Shared.DTOs
+@using Microsoft.AspNetCore.SignalR.Client
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<PageTitle>Notifications - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Notifications</h1>
+            <p class="text-gray-400">Activity log and system notifications</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            @if (stats != null && stats.UnreadCount > 0)
+            {
+                <button class="btn-secondary" @onclick="MarkAllAsRead">
+                    ✓ Mark All Read
+                </button>
+            }
+            <button class="btn-secondary" @onclick="LoadNotificationsAsync">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+            @errorMessage
+        </div>
+    }
+
+    <!-- Stats Cards -->
+    @if (stats != null)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Today</p>
+                        <p class="text-2xl font-bold">@stats.TotalToday</p>
+                    </div>
+                    <div class="text-2xl">📅</div>
+                </div>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">This Week</p>
+                        <p class="text-2xl font-bold">@stats.TotalThisWeek</p>
+                    </div>
+                    <div class="text-2xl">📊</div>
+                </div>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Unread</p>
+                        <p class="text-2xl font-bold text-blue-400">@stats.UnreadCount</p>
+                    </div>
+                    <div class="text-2xl">📬</div>
+                </div>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Channels</p>
+                        <p class="text-2xl font-bold text-green-400">@(channels?.Count(c => c.IsEnabled) ?? 0)</p>
+                    </div>
+                    <div class="text-2xl">📡</div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content: Notifications List -->
+        <div class="lg:col-span-2">
+            <div class="card">
+                <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold">Recent Notifications</h2>
+                    <div class="flex items-center space-x-2">
+                        <select @bind="filterType" @bind:after="LoadNotificationsAsync" class="input text-sm">
+                            <option value="">All Types</option>
+                            <option value="SyncCompleted">Sync Completed</option>
+                            <option value="SyncFailed">Sync Failed</option>
+                            <option value="Rollback">Rollback</option>
+                            <option value="Error">Errors</option>
+                            <option value="Info">Info</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="divide-y divide-gray-700">
+                    @if (notifications != null && notifications.Any())
+                    {
+                        @foreach (var notification in notifications)
+                        {
+                            <div class="p-4 hover:bg-gray-700/50 transition-colors @(!notification.IsRead ? "bg-blue-500/5" : "")">
+                                <div class="flex items-start space-x-4">
+                                    <div class="w-10 h-10 rounded-full bg-@(notification.TypeColor)-500/20 flex items-center justify-center text-xl flex-shrink-0">
+                                        @notification.TypeIcon
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <h3 class="font-medium truncate">@notification.Title</h3>
+                                            <span class="text-sm text-gray-500 flex-shrink-0 ml-2">@notification.TimeAgo</span>
+                                        </div>
+                                        <p class="text-gray-400 text-sm">@notification.Message</p>
+                                        @if (!string.IsNullOrEmpty(notification.ProjectName))
+                                        {
+                                            <p class="text-sm text-gray-500 mt-1">Project: @notification.ProjectName</p>
+                                        }
+                                        @if (!string.IsNullOrEmpty(notification.Details))
+                                        {
+                                            <details class="mt-2">
+                                                <summary class="text-sm text-blue-400 cursor-pointer">View Details</summary>
+                                                <pre class="mt-2 p-2 bg-gray-800 rounded text-xs overflow-x-auto">@notification.Details</pre>
+                                            </details>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Pagination -->
+                        @if (pagination != null && pagination.TotalPages > 1)
+                        {
+                            <div class="p-4 flex items-center justify-between">
+                                <span class="text-sm text-gray-400">
+                                    Page @pagination.Page of @pagination.TotalPages (@pagination.TotalItems total)
+                                </span>
+                                <div class="flex space-x-2">
+                                    <button class="btn-secondary text-sm" disabled="@(!pagination.HasPrevious)"
+                                            @onclick="() => ChangePage(pagination.Page - 1)">
+                                        Previous
+                                    </button>
+                                    <button class="btn-secondary text-sm" disabled="@(!pagination.HasNext)"
+                                            @onclick="() => ChangePage(pagination.Page + 1)">
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else if (isLoading)
+                    {
+                        <div class="p-8 text-center text-gray-500">
+                            <span class="animate-spin inline-block mr-2">⏳</span> Loading...
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-8 text-center text-gray-500">
+                            <p>No notifications yet</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Channels & Live Notifications -->
+        <div class="space-y-6">
+            <!-- Live Notifications -->
+            <div class="card p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">Live Updates</h2>
+                    <span class="@(isConnected ? "text-green-400" : "text-red-400") text-sm">
+                        @(isConnected ? "🟢 Connected" : "🔴 Disconnected")
+                    </span>
+                </div>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    @if (liveNotifications.Any())
+                    {
+                        @foreach (var notification in liveNotifications.TakeLast(5).Reverse())
+                        {
+                            <div class="p-2 bg-gray-800 rounded text-sm animate-pulse-once">
+                                <span class="text-gray-400">@notification.TimeAgo</span>
+                                <span class="ml-2">@notification.Title</span>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-gray-500 text-sm text-center py-2">Waiting for updates...</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Notification Channels -->
+            <div class="card p-4">
+                <h2 class="text-lg font-semibold mb-4">Notification Channels</h2>
+                @if (channels != null)
+                {
+                    <div class="space-y-3">
+                        @foreach (var channel in channels)
+                        {
+                            <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <span class="text-xl">@GetChannelIcon(channel.Channel)</span>
+                                    <div>
+                                        <p class="font-medium">@channel.Name</p>
+                                        <p class="text-xs text-gray-400">
+                                            @(channel.IsConfigured ? "Configured" : "Not configured")
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    @if (channel.IsEnabled)
+                                    {
+                                        <span class="text-green-400 text-sm">✓</span>
+                                    }
+                                    <button class="btn-secondary text-xs px-2 py-1"
+                                            disabled="@(!channel.IsConfigured)"
+                                            @onclick="() => TestChannel(channel.Channel)">
+                                        Test
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Quick Stats by Type -->
+            @if (stats?.ByType != null && stats.ByType.Any())
+            {
+                <div class="card p-4">
+                    <h2 class="text-lg font-semibold mb-4">By Type</h2>
+                    <div class="space-y-2">
+                        @foreach (var kvp in stats.ByType.OrderByDescending(x => x.Value).Take(5))
+                        {
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400">@kvp.Key</span>
+                                <span class="font-medium">@kvp.Value</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<NotificationDto>? notifications;
+    private NotificationStatsDto? stats;
+    private List<NotificationChannelDto>? channels;
+    private PaginationMeta? pagination;
+    private List<NotificationDto> liveNotifications = new();
+
+    private string? errorMessage;
+    private string filterType = "";
+    private int currentPage = 1;
+    private bool isLoading = false;
+    private bool isConnected = false;
+
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        await SetupSignalRAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        await Task.WhenAll(
+            LoadNotificationsAsync(),
+            LoadStatsAsync(),
+            LoadChannelsAsync()
+        );
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var url = $"api/v1/notifications?page={currentPage}&pageSize=20";
+            if (!string.IsNullOrEmpty(filterType))
+            {
+                url += $"&type={filterType}";
+            }
+
+            var response = await Http.GetFromJsonAsync<ApiResponse<PagedResponse<NotificationDto>>>(url);
+            if (response?.Success == true && response.Data != null)
+            {
+                notifications = response.Data.Data;
+                pagination = response.Data.Pagination;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load notifications: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<ApiResponse<NotificationStatsDto>>("api/v1/notifications/stats");
+            if (response?.Success == true)
+            {
+                stats = response.Data;
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadChannelsAsync()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<ApiResponse<List<NotificationChannelDto>>>("api/v1/notifications/channels");
+            if (response?.Success == true)
+            {
+                channels = response.Data;
+            }
+        }
+        catch { }
+    }
+
+    private async Task SetupSignalRAsync()
+    {
+        try
+        {
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/notifications"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.On<object>("NotificationReceived", (notification) =>
+            {
+                // Add to live notifications
+                liveNotifications.Add(new NotificationDto
+                {
+                    Title = "New notification",
+                    TimeAgo = "just now"
+                });
+                InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.Closed += async (ex) =>
+            {
+                isConnected = false;
+                await InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Reconnected += async (id) =>
+            {
+                isConnected = true;
+                await InvokeAsync(StateHasChanged);
+            };
+
+            await hubConnection.StartAsync();
+            isConnected = true;
+        }
+        catch
+        {
+            isConnected = false;
+        }
+    }
+
+    private async Task ChangePage(int page)
+    {
+        currentPage = page;
+        await LoadNotificationsAsync();
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        try
+        {
+            await Http.PostAsync("api/v1/notifications/read-all", null);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to mark as read: {ex.Message}";
+        }
+    }
+
+    private async Task TestChannel(string channel)
+    {
+        try
+        {
+            var response = await Http.PostAsync($"api/v1/notifications/channels/{channel}/test", null);
+            if (response.IsSuccessStatusCode)
+            {
+                // Show success
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Test failed: {ex.Message}";
+        }
+    }
+
+    private static string GetChannelIcon(string channel) => channel switch
+    {
+        "Email" => "📧",
+        "Discord" => "💬",
+        "Telegram" => "✈️",
+        "Slack" => "💼",
+        "Line" => "💚",
+        "Webhook" => "🔗",
+        _ => "📢"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection != null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
