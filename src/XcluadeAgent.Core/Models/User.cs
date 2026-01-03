@@ -60,6 +60,11 @@ public class User
     public DateTime? LockedUntil { get; set; }
 
     /// <summary>
+    /// Requires password change on next login
+    /// </summary>
+    public bool RequirePasswordChange { get; set; }
+
+    /// <summary>
     /// Two-factor authentication enabled
     /// </summary>
     public bool TwoFactorEnabled { get; set; }
@@ -68,6 +73,16 @@ public class User
     /// Two-factor secret key
     /// </summary>
     public string? TwoFactorSecret { get; set; }
+
+    /// <summary>
+    /// Refresh token for session renewal
+    /// </summary>
+    public string? RefreshToken { get; set; }
+
+    /// <summary>
+    /// Refresh token expiration
+    /// </summary>
+    public DateTime? RefreshTokenExpiresAt { get; set; }
 
     /// <summary>
     /// GitHub OAuth ID if linked

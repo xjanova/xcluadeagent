@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# GitHub
+.github
+
+# Documentation
+*.md
+docs/
+README*
+
+# IDE
+.idea
+.vscode
+*.sln.DotSettings*
+
+# Tests
+tests/
+*.Tests/
+**/TestResults/
+
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Environment files
+.env
+.env.*
+*.local
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# Other
+*.pdf
+*.zip
+*.tar.gz
+docker-compose*.yml
+Dockerfile*
+.dockerignore
