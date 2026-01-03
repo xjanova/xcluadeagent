@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
 using OtpNet;
 
 namespace XcluadeAgent.Infrastructure.Security;
@@ -36,6 +37,12 @@ public class TwoFactorService : ITwoFactorService
 {
     private const int SecretKeyLength = 20;
     private const int CodeValidityWindow = 1; // Accept codes within +/- 1 time step (30 seconds each)
+    private readonly ILogger<TwoFactorService>? _logger;
+
+    public TwoFactorService(ILogger<TwoFactorService>? logger = null)
+    {
+        _logger = logger;
+    }
 
     public string GenerateSecretKey()
     {
@@ -73,8 +80,9 @@ public class TwoFactorService : ITwoFactorService
             // Verify with a time window to handle clock drift
             return totp.VerifyTotp(code, out _, new VerificationWindow(CodeValidityWindow, CodeValidityWindow));
         }
-        catch
+        catch (Exception ex)
         {
+            _logger?.LogDebug(ex, "TOTP validation failed - invalid secret format or crypto error");
             return false;
         }
     }

@@ -5,6 +5,7 @@ using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
 using XcluadeAgent.Shared.DTOs;
+using XcluadeAgent.Shared.Security;
 
 namespace XcluadeAgent.Api.Controllers;
 
@@ -89,6 +90,19 @@ public class ProjectsController : ControllerBase
             return BadRequest(ApiResponse<ProjectDto>.Fail("A project with this name already exists"));
         }
 
+        // Validate local path for security (path traversal prevention)
+        if (!PathValidator.IsSafePath(request.LocalPath))
+        {
+            _logger.LogWarning("Rejected project creation with unsafe path: {Path}", request.LocalPath);
+            return BadRequest(ApiResponse<ProjectDto>.Fail("Invalid local path. Path must be absolute and cannot contain traversal sequences."));
+        }
+
+        if (!PathValidator.IsPathInAllowedDirectory(request.LocalPath))
+        {
+            _logger.LogWarning("Rejected project creation with path outside allowed directories: {Path}", request.LocalPath);
+            return BadRequest(ApiResponse<ProjectDto>.Fail("Local path must be within allowed directories (/var/www, /home, /srv, /opt, /data)."));
+        }
+
         var project = new Project
         {
             Name = request.Name,
@@ -140,6 +154,22 @@ public class ProjectsController : ControllerBase
         if (project == null)
         {
             return NotFound(ApiResponse<ProjectDto>.Fail("Project not found"));
+        }
+
+        // Validate local path if being updated (path traversal prevention)
+        if (!string.IsNullOrEmpty(request.LocalPath))
+        {
+            if (!PathValidator.IsSafePath(request.LocalPath))
+            {
+                _logger.LogWarning("Rejected project update with unsafe path: {Path}", request.LocalPath);
+                return BadRequest(ApiResponse<ProjectDto>.Fail("Invalid local path. Path must be absolute and cannot contain traversal sequences."));
+            }
+
+            if (!PathValidator.IsPathInAllowedDirectory(request.LocalPath))
+            {
+                _logger.LogWarning("Rejected project update with path outside allowed directories: {Path}", request.LocalPath);
+                return BadRequest(ApiResponse<ProjectDto>.Fail("Local path must be within allowed directories (/var/www, /home, /srv, /opt, /data)."));
+            }
         }
 
         // Update fields

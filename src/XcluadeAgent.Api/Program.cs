@@ -234,6 +234,14 @@ builder.Services.AddRateLimiter(options =>
         opt.Window = TimeSpan.FromMinutes(1);
         opt.QueueLimit = 2;
     });
+
+    // Webhook rate limit - 30 webhook requests per minute (generous for GitHub)
+    options.AddFixedWindowLimiter("webhook", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 5;
+    });
 });
 
 // Blazor
@@ -286,9 +294,12 @@ app.MapGet("/health", () => Results.Ok(new
     timestamp = DateTime.UtcNow
 }));
 
-// Webhook endpoint for GitHub
+// Webhook endpoint for GitHub (rate limited)
 app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHubService, ISyncService syncService, IProjectRepository projectRepository, ILogger<Program> logger) =>
 {
+    // Log webhook request for security auditing
+    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
     try
     {
         // Read the request body
@@ -413,19 +424,21 @@ app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHub
                 break;
         }
 
+        logger.LogInformation("Webhook processed successfully from {ClientIp}. Project: {Project}, Event: {Event}",
+            clientIp, project.Name, eventType);
         return Results.Ok(new { message = "Webhook processed", project = project.Name, eventType });
     }
     catch (System.Text.Json.JsonException ex)
     {
-        Log.Warning(ex, "Invalid JSON in webhook payload");
+        logger.LogWarning(ex, "Invalid JSON in webhook payload from {ClientIp}", clientIp);
         return Results.BadRequest(new { error = "Invalid JSON payload" });
     }
     catch (Exception ex)
     {
-        Log.Error(ex, "Error processing webhook");
+        logger.LogError(ex, "Error processing webhook from {ClientIp}", clientIp);
         return Results.Problem("Internal server error processing webhook");
     }
-});
+}).RequireRateLimiting("webhook");
 
 var port = builder.Configuration.GetValue("Server:Port", 5000);
 var host = builder.Configuration.GetValue("Server:Host", "0.0.0.0");

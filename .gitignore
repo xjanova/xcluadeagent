@@ -1,0 +1,132 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# IDE
+.idea/
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vscode/
+
+# User-specific files
+*.rsuser
+*.sln.ide
+*.psess
+*.vsp
+*.vspx
+*.sap
+*.ncrunch*
+
+# NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+.nuget/
+nuget.config
+*.lock.json
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+data/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Config with secrets (use .env.example as template)
+.env
+.env.local
+.env.production
+config/config.local.yaml
+config/config.secrets.yaml
+appsettings.*.json
+!appsettings.json
+!appsettings.Development.json
+
+# Secrets and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+certs/
+
+# Docker volumes
+docker/volumes/
+docker/data/
+
+# Backup files
+*.bak
+*.backup
+backups/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# Publish output
+publish/
+Published/
+
+# Node (if using any Node tooling)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# JetBrains Rider
+*.sln.iml
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Mac crap
+.Spotlight-V100
+.Trashes
+
+# GitHub Actions cache
+.github/.cache/
+
+# Terraform (if using infrastructure as code)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
