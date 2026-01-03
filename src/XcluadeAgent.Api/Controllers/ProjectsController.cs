@@ -242,7 +242,7 @@ public class ProjectsController : ControllerBase
         {
             _logger.LogInformation("Sync triggered for project {Name} by {User}", project.Name, username);
 
-            var result = await _syncService.SyncProjectAsync(id, username, cancellationToken);
+            var result = await _syncService.SyncAsync(id, SyncTrigger.Manual, username, cancellationToken);
 
             if (result.Success)
             {
@@ -286,7 +286,7 @@ public class ProjectsController : ControllerBase
             _logger.LogInformation("Rollback triggered for project {Name} to {Version} by {User}",
                 project.Name, history.ToVersion, username);
 
-            var result = await _syncService.RollbackProjectAsync(id, historyId, username, cancellationToken);
+            var result = await _syncService.RollbackAsync(id, historyId, username, cancellationToken);
 
             if (result.Success)
             {
@@ -433,6 +433,19 @@ public class ProjectsController : ControllerBase
         BytesTransferred = FormatBytes(history.BytesTransferred),
         IsRollback = history.IsRollback,
         HasBackup = !string.IsNullOrEmpty(history.BackupPath)
+    };
+
+    private static SyncHistoryDto MapHistoryToDto(SyncResult result) => new()
+    {
+        Id = result.HistoryId ?? Guid.Empty,
+        ToVersion = result.Version,
+        Success = result.Success,
+        ErrorMessage = result.ErrorMessage,
+        FilesChanged = result.FilesChanged,
+        BytesTransferred = FormatBytes(result.BytesTransferred),
+        Duration = FormatDuration(result.DurationMs),
+        HasBackup = !string.IsNullOrEmpty(result.BackupPath),
+        IsRollback = result.RolledBack
     };
 
     private static ProjectConfig MapFromConfigDto(ProjectConfigDto dto) => new()

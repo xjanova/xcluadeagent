@@ -379,7 +379,7 @@ app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHub
                     {
                         try
                         {
-                            await syncService.SyncProjectAsync(project.Id, "webhook", default);
+                            await syncService.SyncAsync(project.Id, XcluadeAgent.Core.Enums.SyncTrigger.Webhook, "webhook", default);
                         }
                         catch (Exception ex)
                         {
@@ -404,7 +404,7 @@ app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHub
                         {
                             try
                             {
-                                await syncService.SyncProjectAsync(project.Id, "webhook", default);
+                                await syncService.SyncAsync(project.Id, XcluadeAgent.Core.Enums.SyncTrigger.Webhook, "webhook", default);
                             }
                             catch (Exception ex)
                             {
