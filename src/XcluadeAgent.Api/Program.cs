@@ -12,6 +12,7 @@ using XcluadeAgent.Infrastructure.License;
 using XcluadeAgent.Infrastructure.Notifications;
 using XcluadeAgent.Infrastructure.Persistence;
 using XcluadeAgent.Infrastructure.Scanner;
+using XcluadeAgent.Infrastructure.Security;
 using XcluadeAgent.Infrastructure.Sync;
 using XcluadeAgent.Api.Hubs;
 using XcluadeAgent.Shared.Constants;
@@ -87,6 +88,7 @@ builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
 builder.Services.AddScoped<ISyncService, SyncService>();
+builder.Services.AddSingleton<ITwoFactorService, TwoFactorService>();
 
 // Scanner services
 builder.Services.AddScoped<ISystemScanner, SystemScanner>();
@@ -116,8 +118,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidIssuer = "XcluadeAgent",
+            ValidateAudience = true,
+            ValidAudience = "XcluadeAgent",
+            ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
 
@@ -250,11 +255,145 @@ app.MapGet("/health", () => Results.Ok(new
     timestamp = DateTime.UtcNow
 }));
 
-// Webhook endpoint
-app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHubService) =>
+// Webhook endpoint for GitHub
+app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHubService, ISyncService syncService, IProjectRepository projectRepository, ILogger<Program> logger) =>
 {
-    // Handle GitHub webhook
-    return Results.Ok();
+    try
+    {
+        // Read the request body
+        context.Request.EnableBuffering();
+        using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen: true);
+        var payload = await reader.ReadToEndAsync();
+        context.Request.Body.Position = 0;
+
+        // Get signature and event type from headers
+        var signature = context.Request.Headers["X-Hub-Signature-256"].FirstOrDefault();
+        var eventType = context.Request.Headers["X-GitHub-Event"].FirstOrDefault();
+        var deliveryId = context.Request.Headers["X-GitHub-Delivery"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(signature))
+        {
+            logger.LogWarning("Webhook received without signature. Delivery: {DeliveryId}", deliveryId);
+            return Results.Unauthorized();
+        }
+
+        if (string.IsNullOrEmpty(eventType))
+        {
+            logger.LogWarning("Webhook received without event type. Delivery: {DeliveryId}", deliveryId);
+            return Results.BadRequest(new { error = "Missing X-GitHub-Event header" });
+        }
+
+        // Parse the payload to get repository info
+        var jsonDoc = System.Text.Json.JsonDocument.Parse(payload);
+        var repoFullName = jsonDoc.RootElement.TryGetProperty("repository", out var repo)
+            ? repo.TryGetProperty("full_name", out var name) ? name.GetString() : null
+            : null;
+
+        if (string.IsNullOrEmpty(repoFullName))
+        {
+            logger.LogWarning("Webhook payload missing repository info. Delivery: {DeliveryId}", deliveryId);
+            return Results.BadRequest(new { error = "Missing repository information" });
+        }
+
+        // Find project by repository
+        var projects = await projectRepository.GetAllAsync();
+        var project = projects.FirstOrDefault(p =>
+            p.Repository.Equals(repoFullName, StringComparison.OrdinalIgnoreCase));
+
+        if (project == null)
+        {
+            logger.LogInformation("No project configured for repository {Repository}. Delivery: {DeliveryId}", repoFullName, deliveryId);
+            return Results.Ok(new { message = "No project configured for this repository" });
+        }
+
+        // Validate webhook signature using project's webhook secret
+        var webhookSecret = project.WebhookSecret;
+        if (string.IsNullOrEmpty(webhookSecret))
+        {
+            logger.LogWarning("Project {Project} has no webhook secret configured. Delivery: {DeliveryId}", project.Name, deliveryId);
+            return Results.Unauthorized();
+        }
+
+        if (!gitHubService.ValidateWebhookSignature(payload, signature, webhookSecret))
+        {
+            logger.LogWarning("Invalid webhook signature for project {Project}. Delivery: {DeliveryId}", project.Name, deliveryId);
+            return Results.Unauthorized();
+        }
+
+        logger.LogInformation("Valid webhook received for {Project}. Event: {Event}, Delivery: {DeliveryId}",
+            project.Name, eventType, deliveryId);
+
+        // Handle specific events
+        switch (eventType.ToLower())
+        {
+            case "release":
+                var action = jsonDoc.RootElement.TryGetProperty("action", out var actionProp)
+                    ? actionProp.GetString() : null;
+
+                if (action == "published" && project.UseReleases && project.Enabled)
+                {
+                    logger.LogInformation("Triggering sync for project {Project} due to release publish", project.Name);
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await syncService.SyncProjectAsync(project.Id, "webhook", default);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "Failed to sync project {Project} from webhook", project.Name);
+                        }
+                    });
+                }
+                break;
+
+            case "push":
+                if (!project.UseReleases && project.Enabled)
+                {
+                    var refName = jsonDoc.RootElement.TryGetProperty("ref", out var refProp)
+                        ? refProp.GetString() : null;
+                    var expectedRef = $"refs/heads/{project.Branch ?? "main"}";
+
+                    if (refName == expectedRef)
+                    {
+                        logger.LogInformation("Triggering sync for project {Project} due to push to {Branch}",
+                            project.Name, project.Branch);
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await syncService.SyncProjectAsync(project.Id, "webhook", default);
+                            }
+                            catch (Exception ex)
+                            {
+                                logger.LogError(ex, "Failed to sync project {Project} from webhook", project.Name);
+                            }
+                        });
+                    }
+                }
+                break;
+
+            case "ping":
+                logger.LogInformation("Ping webhook received for project {Project}", project.Name);
+                break;
+
+            default:
+                logger.LogDebug("Unhandled webhook event {Event} for project {Project}", eventType, project.Name);
+                break;
+        }
+
+        return Results.Ok(new { message = "Webhook processed", project = project.Name, eventType });
+    }
+    catch (System.Text.Json.JsonException ex)
+    {
+        Log.Warning(ex, "Invalid JSON in webhook payload");
+        return Results.BadRequest(new { error = "Invalid JSON payload" });
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Error processing webhook");
+        return Results.Problem("Internal server error processing webhook");
+    }
 });
 
 var port = builder.Configuration.GetValue("Server:Port", 5000);
