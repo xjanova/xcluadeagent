@@ -142,7 +142,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                     indicators.Add((SiteEnvironment.Development, 50));
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read .env file at {Path}", envFile);
+            }
         }
 
         // Check directory name
@@ -172,7 +175,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                     content.Contains("development.", StringComparison.OrdinalIgnoreCase))
                     indicators.Add((SiteEnvironment.Development, 60));
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read config file {Path}", configFile);
+            }
         }
 
         // Check for node_modules/.cache or similar dev artifacts
@@ -231,7 +237,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                     indicators.Add("APP_URL points to localhost");
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read .env file for indicators at {Path}", envFile);
+            }
         }
 
         // Check for common development files
@@ -262,7 +271,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                         indicators.Add("Branch suggests staging");
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read git HEAD file at {Path}", headFile);
+            }
         }
 
         // Check for SSL
@@ -290,7 +302,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                 if (content.Contains("docker") || content.Contains("kubepods") || content.Contains("containerd"))
                     return true;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read cgroup file for container detection");
+            }
         }
 
         // Check for Kubernetes
@@ -315,7 +330,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
             if (vmIndicators.Any(v => productName.Contains(v, StringComparison.OrdinalIgnoreCase)))
                 return true;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to detect VM environment");
+        }
 
         return false;
     }
@@ -393,7 +411,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                 return !isPrivate;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to check for public IP");
+        }
 
         return false;
     }
@@ -414,7 +435,10 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to check SSL config for {Path}", path);
+        }
 
         return false;
     }

@@ -191,7 +191,7 @@ builder.Services.AddSwaggerGen(c =>
 // SignalR
 builder.Services.AddSignalR();
 
-// CORS
+// CORS - Restrict to specific methods and headers
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowDashboard", policy =>
@@ -200,9 +200,39 @@ builder.Services.AddCors(options =>
             ?? ["http://localhost:5000", "http://localhost:3000"];
 
         policy.WithOrigins(origins)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
+            .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            .WithHeaders("Content-Type", "Authorization", "X-Requested-With")
             .AllowCredentials();
+    });
+});
+
+// Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+
+    // Global rate limit - 100 requests per minute
+    options.AddFixedWindowLimiter("global", opt =>
+    {
+        opt.PermitLimit = 100;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 10;
+    });
+
+    // Auth rate limit - 10 login attempts per minute
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit = 10;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+    });
+
+    // Sync rate limit - 5 sync requests per minute per project
+    options.AddFixedWindowLimiter("sync", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 2;
     });
 });
 
@@ -233,6 +263,7 @@ if (app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseCors("AllowDashboard");
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

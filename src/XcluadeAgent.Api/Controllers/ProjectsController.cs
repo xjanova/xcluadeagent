@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
@@ -15,6 +16,7 @@ public class ProjectsController : ControllerBase
     private readonly IProjectRepository _projectRepository;
     private readonly ISyncHistoryRepository _syncHistoryRepository;
     private readonly IGitHubService _gitHubService;
+    private readonly ISyncService _syncService;
     private readonly ILicenseService _licenseService;
     private readonly ILogger<ProjectsController> _logger;
 
@@ -22,12 +24,14 @@ public class ProjectsController : ControllerBase
         IProjectRepository projectRepository,
         ISyncHistoryRepository syncHistoryRepository,
         IGitHubService gitHubService,
+        ISyncService syncService,
         ILicenseService licenseService,
         ILogger<ProjectsController> logger)
     {
         _projectRepository = projectRepository;
         _syncHistoryRepository = syncHistoryRepository;
         _gitHubService = gitHubService;
+        _syncService = syncService;
         _licenseService = licenseService;
         _logger = logger;
     }
@@ -182,6 +186,92 @@ public class ProjectsController : ControllerBase
         _logger.LogInformation("Project deleted: {Name} ({Id})", project.Name, id);
 
         return Ok(ApiResponse.Ok("Project deleted successfully"));
+    }
+
+    /// <summary>
+    /// Trigger project sync
+    /// </summary>
+    [HttpPost("{id:guid}/sync")]
+    [EnableRateLimiting("sync")]
+    public async Task<ActionResult<ApiResponse<SyncHistoryDto>>> Sync(Guid id, CancellationToken cancellationToken)
+    {
+        var project = await _projectRepository.GetByIdAsync(id);
+        if (project == null)
+        {
+            return NotFound(ApiResponse<SyncHistoryDto>.Fail("Project not found"));
+        }
+
+        if (!project.Enabled)
+        {
+            return BadRequest(ApiResponse<SyncHistoryDto>.Fail("Project is disabled"));
+        }
+
+        var username = User.Identity?.Name ?? "system";
+
+        try
+        {
+            _logger.LogInformation("Sync triggered for project {Name} by {User}", project.Name, username);
+
+            var result = await _syncService.SyncProjectAsync(id, username, cancellationToken);
+
+            if (result.Success)
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Ok(MapHistoryToDto(result), "Sync completed successfully"));
+            }
+            else
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Fail(result.ErrorMessage ?? "Sync failed", MapHistoryToDto(result)));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Sync failed for project {Name}", project.Name);
+            return StatusCode(500, ApiResponse<SyncHistoryDto>.Fail($"Sync failed: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Trigger project rollback
+    /// </summary>
+    [HttpPost("{id:guid}/rollback/{historyId:guid}")]
+    [EnableRateLimiting("sync")]
+    public async Task<ActionResult<ApiResponse<SyncHistoryDto>>> Rollback(Guid id, Guid historyId, CancellationToken cancellationToken)
+    {
+        var project = await _projectRepository.GetByIdAsync(id);
+        if (project == null)
+        {
+            return NotFound(ApiResponse<SyncHistoryDto>.Fail("Project not found"));
+        }
+
+        var history = await _syncHistoryRepository.GetByIdAsync(historyId);
+        if (history == null || history.ProjectId != id)
+        {
+            return NotFound(ApiResponse<SyncHistoryDto>.Fail("Sync history not found"));
+        }
+
+        var username = User.Identity?.Name ?? "system";
+
+        try
+        {
+            _logger.LogInformation("Rollback triggered for project {Name} to {Version} by {User}",
+                project.Name, history.ToVersion, username);
+
+            var result = await _syncService.RollbackProjectAsync(id, historyId, username, cancellationToken);
+
+            if (result.Success)
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Ok(MapHistoryToDto(result), "Rollback completed successfully"));
+            }
+            else
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Fail(result.ErrorMessage ?? "Rollback failed", MapHistoryToDto(result)));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Rollback failed for project {Name}", project.Name);
+            return StatusCode(500, ApiResponse<SyncHistoryDto>.Fail($"Rollback failed: {ex.Message}"));
+        }
     }
 
     /// <summary>

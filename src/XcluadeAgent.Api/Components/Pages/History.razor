@@ -288,14 +288,23 @@
 
     private async Task LoadHistory()
     {
-        // TODO: Load from API
-        history = new List<SyncHistoryDto>
+        try
         {
-            new() { Id = Guid.NewGuid(), ProjectName = "xman-website", FromVersion = "v2.0.9", ToVersion = "v2.1.0", Success = true, Trigger = "Webhook", StartedAt = DateTime.Now.AddHours(-2), CompletedAt = DateTime.Now.AddHours(-2).AddMinutes(1), DurationMs = 45000, FilesChanged = 23, BytesTransferred = 1024000, BackupPath = "/backups/xman-website/2024-01-01" },
-            new() { Id = Guid.NewGuid(), ProjectName = "api-gateway", FromVersion = "v1.5.2", ToVersion = "v1.5.3", Success = true, Trigger = "Manual", InitiatedBy = "admin", StartedAt = DateTime.Now.AddDays(-1), CompletedAt = DateTime.Now.AddDays(-1).AddMinutes(2), DurationMs = 120000, FilesChanged = 12, BytesTransferred = 512000, BackupPath = "/backups/api-gateway/2024-01-01" },
-            new() { Id = Guid.NewGuid(), ProjectName = "admin-dashboard", FromVersion = "v2.9.0", ToVersion = "v3.0.0-beta", Success = false, Trigger = "Scheduled", StartedAt = DateTime.Now.AddHours(-5), CompletedAt = DateTime.Now.AddHours(-5).AddMinutes(3), DurationMs = 180000, FilesChanged = 0, BytesTransferred = 2048000, ErrorMessage = "npm install failed: ERESOLVE unable to resolve dependency tree" },
-            new() { Id = Guid.NewGuid(), ProjectName = "xman-website", FromVersion = "v2.0.8", ToVersion = "v2.0.9", Success = true, Trigger = "Webhook", StartedAt = DateTime.Now.AddDays(-3), CompletedAt = DateTime.Now.AddDays(-3).AddMinutes(1), DurationMs = 38000, FilesChanged = 8, BytesTransferred = 256000, BackupPath = "/backups/xman-website/2024-01-01" }
-        };
+            var response = await Http.GetFromJsonAsync<ApiResponse<List<SyncHistoryDto>>>("api/v1/dashboard/history?limit=200");
+            if (response?.Success == true && response.Data != null)
+            {
+                history = response.Data;
+            }
+            else
+            {
+                history = new();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading history: {ex.Message}");
+            history = new();
+        }
 
         projectNames = history.Select(h => h.ProjectName).Distinct().ToList();
     }

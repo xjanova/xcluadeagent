@@ -245,18 +245,34 @@
 
     private async Task LoadProjects()
     {
-        // TODO: Fetch from API
-        // var response = await Http.GetFromJsonAsync<ApiResponse<List<ProjectListItemDto>>>("api/v1/projects");
-        // projects = response?.Data ?? new();
-
-        // Mock data
-        projects = new List<ProjectListItemDto>
+        try
         {
-            new() { Id = Guid.NewGuid(), Name = "xman-website", Repository = "xjanova/xman-website", Branch = "main", Framework = "Laravel", Status = "Synced", Enabled = true, LastSyncedVersion = "v2.1.0", LastSyncAt = DateTime.Now.AddHours(-2) },
-            new() { Id = Guid.NewGuid(), Name = "api-gateway", Repository = "xjanova/api-gateway", Branch = "main", Framework = "NodeJs", Status = "Pending", Enabled = true, LastSyncedVersion = "v1.5.3", LastSyncAt = DateTime.Now.AddDays(-1) },
-            new() { Id = Guid.NewGuid(), Name = "admin-dashboard", Repository = "xjanova/admin-dashboard", Branch = "develop", Framework = "React", Status = "Failed", Enabled = true, LastSyncedVersion = "v3.0.0-beta", LastSyncAt = DateTime.Now.AddHours(-5) },
-            new() { Id = Guid.NewGuid(), Name = "legacy-cms", Repository = "xjanova/legacy-cms", Branch = "master", Framework = "Other", Status = "Synced", Enabled = false, LastSyncedVersion = "v1.0.0", LastSyncAt = DateTime.Now.AddDays(-30) }
-        };
+            var response = await Http.GetFromJsonAsync<ApiResponse<List<ProjectDto>>>("api/v1/projects");
+            if (response?.Success == true && response.Data != null)
+            {
+                projects = response.Data.Select(p => new ProjectListItemDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Repository = p.Repository,
+                    Branch = p.Branch,
+                    Framework = p.Framework,
+                    Status = p.Status,
+                    Enabled = p.Enabled,
+                    LastSyncedVersion = p.LastSyncedVersion,
+                    LastSyncAt = p.LastSyncAt
+                }).ToList();
+            }
+            else
+            {
+                projects = new();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading projects: {ex.Message}");
+            projects = new();
+        }
     }
 
     private void ViewProject(Guid id) => Navigation.NavigateTo($"/projects/{id}");
@@ -292,22 +308,96 @@
 
     private async Task SaveProject()
     {
-        // TODO: Call API to save project
+        try
+        {
+            if (editingProject == null)
+            {
+                // Create new project
+                var createRequest = new CreateProjectRequest
+                {
+                    Name = formData.Name,
+                    Repository = formData.Repository,
+                    LocalPath = formData.LocalPath,
+                    Branch = formData.Branch,
+                    Environment = formData.Environment,
+                    UseReleases = formData.UseReleases,
+                    ReleaseTagPattern = formData.ReleaseTagPattern,
+                    AutoDetectFramework = formData.Framework == "Auto"
+                };
+                var response = await Http.PostAsJsonAsync("api/v1/projects", createRequest);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error creating project: {response.StatusCode}");
+                }
+            }
+            else
+            {
+                // Update existing project
+                var updateRequest = new UpdateProjectRequest
+                {
+                    Name = formData.Name,
+                    Repository = formData.Repository,
+                    LocalPath = formData.LocalPath,
+                    Branch = formData.Branch,
+                    Environment = formData.Environment,
+                    UseReleases = formData.UseReleases,
+                    ReleaseTagPattern = formData.ReleaseTagPattern,
+                    Enabled = formData.Enabled
+                };
+                var response = await Http.PutAsJsonAsync($"api/v1/projects/{editingProject.Id}", updateRequest);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error updating project: {response.StatusCode}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving project: {ex.Message}");
+        }
+
         CloseModal();
         await LoadProjects();
     }
 
     private async Task SyncProject(Guid id)
     {
-        // TODO: Call API to trigger sync
-        // await Http.PostAsync($"api/v1/projects/{id}/sync", null);
+        try
+        {
+            var response = await Http.PostAsync($"api/v1/projects/{id}/sync", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadProjects();
+            }
+            else
+            {
+                Console.WriteLine($"Error syncing project: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error syncing project: {ex.Message}");
+        }
     }
 
     private async Task DeleteProject(Guid id)
     {
-        // TODO: Confirm and call API to delete
-        // await Http.DeleteAsync($"api/v1/projects/{id}");
-        await LoadProjects();
+        try
+        {
+            var response = await Http.DeleteAsync($"api/v1/projects/{id}");
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadProjects();
+            }
+            else
+            {
+                Console.WriteLine($"Error deleting project: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting project: {ex.Message}");
+        }
     }
 
     private string GetStatusClass(string status) => status switch

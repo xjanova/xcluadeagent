@@ -53,7 +53,10 @@ public class SystemScanner : ISystemScanner
             if (int.TryParse(result.Trim(), out var uid))
                 return uid;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get Unix user ID");
+        }
         return -1;
     }
 
@@ -311,7 +314,10 @@ public class SystemScanner : ISystemScanner
                 return versionMatch.Success ? versionMatch.Value : firstLine;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get version for command: {Command}", command);
+        }
         return null;
     }
 

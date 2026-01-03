@@ -338,7 +338,10 @@ public class WebsiteDiscovery : IWebsiteDiscovery
                 site.DirectoryPermissions = mode;
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get ownership info for {Path}", site.DocumentRoot);
+        }
 
         // Detect framework
         site.DetectedFramework = await DetectFrameworkAsync(site.DocumentRoot);
@@ -379,7 +382,10 @@ public class WebsiteDiscovery : IWebsiteDiscovery
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to read git config for {Path}", site.DocumentRoot);
+            }
         }
 
         // Check SSL expiry
@@ -394,7 +400,10 @@ public class WebsiteDiscovery : IWebsiteDiscovery
                     site.SslExpiresAt = expiryDate;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to get SSL expiry for {CertPath}", site.SslCertPath);
+            }
         }
     }
 
@@ -540,7 +549,10 @@ public class WebsiteDiscovery : IWebsiteDiscovery
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to parse package.json for {Path}", packageJsonPath);
+                }
             }
 
             // No match found

@@ -229,7 +229,10 @@ public class WebServerDetector : IWebServerDetector
             if (pids.Length > 0 && int.TryParse(pids[0], out var pid))
                 return pid;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get process ID for {ProcessName}", processName);
+        }
 
         return null;
     }
@@ -257,7 +260,10 @@ public class WebServerDetector : IWebServerDetector
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to get listening ports for PID {Pid}", pid);
+        }
 
         return ports;
     }

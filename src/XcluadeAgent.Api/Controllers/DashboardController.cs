@@ -132,6 +132,37 @@ public class DashboardController : ControllerBase
         return Ok(ApiResponse<AiStatusDto>.Ok(status));
     }
 
+    /// <summary>
+    /// Get all sync history
+    /// </summary>
+    [HttpGet("history")]
+    public async Task<ActionResult<ApiResponse<List<SyncHistoryDto>>>> GetHistory([FromQuery] int limit = 100)
+    {
+        var history = (await _syncHistoryRepository.GetRecentAsync(limit)).ToList();
+
+        var dtos = history.Select(h => new SyncHistoryDto
+        {
+            Id = h.Id,
+            ProjectId = h.ProjectId,
+            ProjectName = h.ProjectName,
+            FromVersion = h.FromVersion,
+            ToVersion = h.ToVersion,
+            Success = h.Success,
+            ErrorMessage = h.ErrorMessage,
+            FilesChanged = h.FilesChanged,
+            BytesTransferred = h.BytesTransferred,
+            DurationMs = h.DurationMs,
+            Trigger = h.Trigger,
+            InitiatedBy = h.InitiatedBy,
+            StartedAt = h.StartedAt,
+            CompletedAt = h.CompletedAt,
+            IsRollback = h.IsRollback,
+            BackupPath = h.BackupPath
+        }).ToList();
+
+        return Ok(ApiResponse<List<SyncHistoryDto>>.Ok(dtos));
+    }
+
     #region Private Methods
 
     private SystemHealthDto GetSystemHealth()
