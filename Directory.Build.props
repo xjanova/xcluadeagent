@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Suppress specific warnings that may be triggered in generated code -->
+    <NoWarn>$(NoWarn);CS8618;CS0414;CS0169;CS0649</NoWarn>
+  </PropertyGroup>
+</Project>
