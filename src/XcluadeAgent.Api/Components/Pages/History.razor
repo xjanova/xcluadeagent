@@ -1,5 +1,7 @@
 @page "/history"
+@using XcluadeAgent.Shared.DTOs
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Sync History - XcluadeAgent</PageTitle>
 
@@ -11,9 +13,39 @@
             <p class="text-gray-400">View all synchronization activities</p>
         </div>
         <div class="flex space-x-2">
-            <button class="btn-secondary" @onclick="ExportHistory">Export</button>
+            <div class="relative">
+                <button class="btn-secondary" @onclick="ToggleExportMenu">📥 Export</button>
+                @if (showExportMenu)
+                {
+                    <div class="absolute right-0 mt-2 w-40 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-10">
+                        <button class="w-full px-4 py-2 text-left hover:bg-gray-700 rounded-t-lg" @onclick="() => ExportHistory(\"csv\")">
+                            📄 Export CSV
+                        </button>
+                        <button class="w-full px-4 py-2 text-left hover:bg-gray-700 rounded-b-lg" @onclick="() => ExportHistory(\"json\")">
+                            📋 Export JSON
+                        </button>
+                    </div>
+                }
+            </div>
+            <button class="btn-secondary" @onclick="LoadHistory">🔄 Refresh</button>
         </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="bg-green-500/10 border border-green-500/50 rounded-lg p-4 text-green-400 flex items-center justify-between">
+            <span>@successMessage</span>
+            <button @onclick="() => successMessage = null" class="text-green-400 hover:text-green-300">×</button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400 flex items-center justify-between">
+            <span>@errorMessage</span>
+            <button @onclick="() => errorMessage = null" class="text-red-400 hover:text-red-300">×</button>
+        </div>
+    }
 
     <!-- Filters -->
     <div class="card p-4">
@@ -121,7 +153,7 @@
                             </span>
                         </td>
                         <td class="p-4 text-gray-400">
-                            @FormatDuration(item.DurationMs)
+                            @(item.Duration ?? "N/A")
                         </td>
                         <td class="p-4">
                             @item.FilesChanged files
@@ -131,7 +163,7 @@
                         </td>
                         <td class="p-4 text-right">
                             <div class="flex items-center justify-end space-x-2">
-                                @if (item.Success && !string.IsNullOrEmpty(item.BackupPath))
+                                @if (item.Success && item.HasBackup)
                                 {
                                     <button class="btn-ghost text-sm px-2 py-1" @onclick:stopPropagation
                                             @onclick="() => RollbackTo(item)" title="Rollback">
@@ -221,7 +253,7 @@
                     </div>
                     <div>
                         <p class="text-sm text-gray-400">Duration</p>
-                        <p>@FormatDuration(selectedItem.DurationMs)</p>
+                        <p>@(selectedItem.Duration ?? "N/A")</p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-400">Files Changed</p>
@@ -229,11 +261,11 @@
                     </div>
                     <div>
                         <p class="text-sm text-gray-400">Data Transferred</p>
-                        <p>@FormatBytes(selectedItem.BytesTransferred)</p>
+                        <p>@(selectedItem.BytesTransferred ?? "N/A")</p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-400">Backup</p>
-                        <p class="font-mono text-xs">@(selectedItem.BackupPath ?? "N/A")</p>
+                        <p class="font-mono text-xs">@(selectedItem.HasBackup ? "Available" : "N/A")</p>
                     </div>
                 </div>
 
@@ -248,7 +280,7 @@
                 }
             </div>
             <div class="p-4 border-t border-gray-700 flex justify-end space-x-3">
-                @if (selectedItem.Success && !string.IsNullOrEmpty(selectedItem.BackupPath))
+                @if (selectedItem.Success && selectedItem.HasBackup)
                 {
                     <button class="btn-secondary" @onclick="() => RollbackTo(selectedItem)">
                         Rollback to this version
@@ -261,9 +293,9 @@
 }
 
 @code {
-    private List<SyncHistoryDto> history = new();
+    private List<SyncHistoryItem> history = new();
     private List<string> projectNames = new();
-    private SyncHistoryDto? selectedItem;
+    private SyncHistoryItem? selectedItem;
 
     private string projectFilter = "";
     private string statusFilter = "";
@@ -273,7 +305,12 @@
     private int currentPage = 1;
     private int pageSize = 20;
 
-    private IEnumerable<SyncHistoryDto> FilteredHistory => history
+    private bool showExportMenu = false;
+    private bool isRollingBack = false;
+    private string? successMessage;
+    private string? errorMessage;
+
+    private IEnumerable<SyncHistoryItem> FilteredHistory => history
         .Where(h => string.IsNullOrEmpty(projectFilter) || h.ProjectName == projectFilter)
         .Where(h => string.IsNullOrEmpty(statusFilter) || h.Success.ToString() == statusFilter)
         .Where(h => string.IsNullOrEmpty(triggerFilter) || h.Trigger == triggerFilter)
@@ -290,7 +327,7 @@
     {
         try
         {
-            var response = await Http.GetFromJsonAsync<ApiResponse<List<SyncHistoryDto>>>("api/v1/dashboard/history?limit=200");
+            var response = await Http.GetFromJsonAsync<ApiResponse<List<SyncHistoryItem>>>("api/v1/dashboard/history?limit=200");
             if (response?.Success == true && response.Data != null)
             {
                 history = response.Data;
@@ -302,26 +339,118 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading history: {ex.Message}");
+            errorMessage = $"Error loading history: {ex.Message}";
             history = new();
         }
 
         projectNames = history.Select(h => h.ProjectName).Distinct().ToList();
     }
 
-    private void ShowDetails(SyncHistoryDto item)
+    private void ShowDetails(SyncHistoryItem item)
     {
         selectedItem = item;
     }
 
-    private async Task RollbackTo(SyncHistoryDto item)
+    private void ToggleExportMenu()
     {
-        // TODO: Trigger rollback
+        showExportMenu = !showExportMenu;
     }
 
-    private async Task ExportHistory()
+    private async Task RollbackTo(SyncHistoryItem item)
     {
-        // TODO: Export to CSV
+        if (isRollingBack) return;
+
+        isRollingBack = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var response = await Http.PostAsync(
+                $"api/v1/projects/{item.ProjectId}/rollback/{item.Id}",
+                null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ApiResponse<object>>();
+                if (result?.Success == true)
+                {
+                    successMessage = $"Rollback initiated for {item.ProjectName} to version {item.ToVersion}";
+                    selectedItem = null;
+                    await LoadHistory();
+                }
+                else
+                {
+                    errorMessage = result?.Errors?.FirstOrDefault() ?? "Rollback failed";
+                }
+            }
+            else
+            {
+                errorMessage = $"Rollback failed: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Rollback error: {ex.Message}";
+        }
+        finally
+        {
+            isRollingBack = false;
+        }
+    }
+
+    private async Task ExportHistory(string format)
+    {
+        showExportMenu = false;
+
+        try
+        {
+            // Build CSV or JSON content
+            if (format == "csv")
+            {
+                var csv = new System.Text.StringBuilder();
+                csv.AppendLine("Id,ProjectName,FromVersion,ToVersion,Success,Trigger,InitiatedBy,StartedAt,CompletedAt,Duration,FilesChanged,ErrorMessage");
+
+                foreach (var h in FilteredHistory)
+                {
+                    csv.AppendLine($"\"{h.Id}\",\"{EscapeCsv(h.ProjectName)}\",\"{EscapeCsv(h.FromVersion)}\",\"{EscapeCsv(h.ToVersion)}\",\"{h.Success}\",\"{h.Trigger}\",\"{EscapeCsv(h.InitiatedBy)}\",\"{h.StartedAt:O}\",\"{h.CompletedAt:O}\",\"{h.Duration}\",\"{h.FilesChanged}\",\"{EscapeCsv(h.ErrorMessage)}\"");
+                }
+
+                await DownloadFile($"sync-history-{DateTime.Now:yyyyMMdd}.csv", csv.ToString(), "text/csv");
+            }
+            else
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(FilteredHistory.ToList(), new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                await DownloadFile($"sync-history-{DateTime.Now:yyyyMMdd}.json", json, "application/json");
+            }
+
+            successMessage = $"Exported {FilteredHistory.Count()} records as {format.ToUpper()}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Export failed: {ex.Message}";
+        }
+    }
+
+    private async Task DownloadFile(string filename, string content, string contentType)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("eval", $@"
+            const link = document.createElement('a');
+            link.href = 'data:{contentType};base64,{base64}';
+            link.download = '{filename}';
+            link.click();
+        ");
+    }
+
+    private static string EscapeCsv(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value.Replace("\"", "\"\"").Replace("\n", " ").Replace("\r", "");
     }
 
     private void PrevPage() => currentPage = Math.Max(1, currentPage - 1);
@@ -351,9 +480,10 @@
         _ => "bg-gray-500/20 text-gray-400"
     };
 
-    private class SyncHistoryDto
+    private class SyncHistoryItem
     {
         public Guid Id { get; set; }
+        public Guid ProjectId { get; set; }
         public string ProjectName { get; set; } = "";
         public string? FromVersion { get; set; }
         public string? ToVersion { get; set; }
@@ -362,10 +492,10 @@
         public string? InitiatedBy { get; set; }
         public DateTime StartedAt { get; set; }
         public DateTime? CompletedAt { get; set; }
-        public long? DurationMs { get; set; }
+        public string? Duration { get; set; }
         public int FilesChanged { get; set; }
-        public long BytesTransferred { get; set; }
-        public string? BackupPath { get; set; }
+        public string? BytesTransferred { get; set; }
+        public bool HasBackup { get; set; }
         public string? ErrorMessage { get; set; }
         public bool IsRollback { get; set; }
     }

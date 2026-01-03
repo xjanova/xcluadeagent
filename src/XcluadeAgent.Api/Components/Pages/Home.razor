@@ -1,6 +1,9 @@
 @page "/"
 @using XcluadeAgent.Shared.DTOs
+@using Microsoft.AspNetCore.SignalR.Client
 @inject HttpClient Http
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
 
 <PageTitle>Dashboard - XcluadeAgent</PageTitle>
 
@@ -12,12 +15,15 @@
             <p class="text-gray-400">Overview of your sync operations</p>
         </div>
         <div class="flex items-center space-x-2">
+            <span class="text-sm @(isConnected ? "text-green-400" : "text-gray-500")">
+                @(isConnected ? "🟢 Live" : "⚪ Offline")
+            </span>
             <button class="btn-secondary flex items-center space-x-2" @onclick="RefreshDashboard">
-                <span>Refresh</span>
+                <span>🔄 Refresh</span>
             </button>
-            <button class="btn-primary flex items-center space-x-2">
-                <span>Add Project</span>
-            </button>
+            <a href="/projects" class="btn-primary flex items-center space-x-2">
+                <span>➕ Add Project</span>
+            </a>
         </div>
     </div>
 
@@ -236,10 +242,66 @@
 @code {
     private DashboardOverviewDto? overview;
     private string? errorMessage;
+    private HubConnection? hubConnection;
+    private bool isConnected = false;
+    private List<string> liveUpdates = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadDashboardDataAsync();
+        await SetupSignalRAsync();
+    }
+
+    private async Task SetupSignalRAsync()
+    {
+        try
+        {
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/sync"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.On<object>("SyncStarted", async (data) =>
+            {
+                liveUpdates.Insert(0, $"🔄 Sync started");
+                if (liveUpdates.Count > 5) liveUpdates.RemoveAt(5);
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<object>("SyncCompleted", async (data) =>
+            {
+                liveUpdates.Insert(0, $"✅ Sync completed");
+                if (liveUpdates.Count > 5) liveUpdates.RemoveAt(5);
+                await LoadDashboardDataAsync();
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<object>("SyncProgress", async (data) =>
+            {
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.Closed += async (ex) =>
+            {
+                isConnected = false;
+                await InvokeAsync(StateHasChanged);
+            };
+
+            hubConnection.Reconnected += async (id) =>
+            {
+                isConnected = true;
+                await InvokeAsync(StateHasChanged);
+            };
+
+            await hubConnection.StartAsync();
+            await hubConnection.SendAsync("SubscribeToAllSyncs");
+            isConnected = true;
+        }
+        catch (Exception ex)
+        {
+            // SignalR is optional, continue without real-time updates
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
     }
 
     private async Task LoadDashboardDataAsync()
@@ -345,4 +407,12 @@
         "Failed" => "text-red-500",
         _ => "text-gray-500"
     };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection != null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
 }

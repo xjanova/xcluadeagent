@@ -1,0 +1,354 @@
+@page "/audit"
+@using XcluadeAgent.Shared.DTOs
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<PageTitle>Audit Log - XcluadeAgent</PageTitle>
+
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">Audit Log</h1>
+            <p class="text-gray-400">Track all system activities and user actions</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button class="btn-secondary" @onclick="() => ExportLogs(\"csv\")">
+                📥 Export CSV
+            </button>
+            <button class="btn-secondary" @onclick="() => ExportLogs(\"json\")">
+                📥 Export JSON
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-red-400">
+            @errorMessage
+        </div>
+    }
+
+    <!-- Stats Cards -->
+    @if (stats != null)
+    {
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Total Logs</p>
+                        <p class="text-2xl font-bold">@stats.TotalLogs</p>
+                    </div>
+                    <div class="text-2xl">📋</div>
+                </div>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Today</p>
+                        <p class="text-2xl font-bold text-blue-400">@stats.TodayLogs</p>
+                    </div>
+                    <div class="text-2xl">📅</div>
+                </div>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">This Week</p>
+                        <p class="text-2xl font-bold text-green-400">@stats.WeekLogs</p>
+                    </div>
+                    <div class="text-2xl">📊</div>
+                </div>
+            </div>
+            <div class="card p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Unique Users</p>
+                        <p class="text-2xl font-bold text-purple-400">@(stats.ByUser?.Count ?? 0)</p>
+                    </div>
+                    <div class="text-2xl">👥</div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Filters -->
+    <div class="card p-4">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">Action</label>
+                <select @bind="filterAction" class="input w-full">
+                    <option value="">All Actions</option>
+                    @if (actionTypes != null)
+                    {
+                        @foreach (var action in actionTypes)
+                        {
+                            <option value="@action">@action</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Entity Type</label>
+                <select @bind="filterEntityType" class="input w-full">
+                    <option value="">All Types</option>
+                    <option value="Project">Project</option>
+                    <option value="User">User</option>
+                    <option value="Settings">Settings</option>
+                    <option value="Sync">Sync</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">From Date</label>
+                <input type="date" @bind="filterFrom" class="input w-full" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">To Date</label>
+                <input type="date" @bind="filterTo" class="input w-full" />
+            </div>
+            <div class="flex items-end">
+                <button class="btn-primary w-full" @onclick="ApplyFilters">
+                    🔍 Search
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Log Table -->
+    <div class="card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Time</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">User</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Action</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Entity</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Details</th>
+                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">IP</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    @if (logs != null && logs.Any())
+                    {
+                        @foreach (var log in logs)
+                        {
+                            <tr class="hover:bg-gray-700/50 transition-colors">
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="text-sm">@log.Timestamp.ToString("MMM dd, HH:mm")</div>
+                                    <div class="text-xs text-gray-500">@log.TimeAgo</div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm">
+                                            @(log.Username?.FirstOrDefault().ToString().ToUpper() ?? "?")
+                                        </div>
+                                        <span>@(log.Username ?? "System")</span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="inline-flex items-center px-2 py-1 rounded text-sm bg-@(log.ActionColor)-500/20 text-@(log.ActionColor)-400">
+                                        @log.ActionIcon @log.Action
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    @if (!string.IsNullOrEmpty(log.EntityType))
+                                    {
+                                        <div class="text-sm">@log.EntityType</div>
+                                        <div class="text-xs text-gray-500">@(log.EntityName ?? log.EntityId?.ToString()?.Substring(0, 8))</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-gray-500">-</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 max-w-xs">
+                                    @if (!string.IsNullOrEmpty(log.Details))
+                                    {
+                                        <details>
+                                            <summary class="text-sm text-blue-400 cursor-pointer truncate">
+                                                @(log.Details.Length > 50 ? log.Details.Substring(0, 50) + "..." : log.Details)
+                                            </summary>
+                                            <pre class="mt-2 p-2 bg-gray-800 rounded text-xs overflow-x-auto max-w-md">@log.Details</pre>
+                                        </details>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-gray-500">-</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-400">
+                                    @(log.IpAddress ?? "-")
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else if (isLoading)
+                    {
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                <span class="animate-spin inline-block mr-2">⏳</span> Loading...
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                                No audit logs found
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        @if (pagination != null && pagination.TotalPages > 1)
+        {
+            <div class="p-4 border-t border-gray-700 flex items-center justify-between">
+                <span class="text-sm text-gray-400">
+                    Showing @((pagination.Page - 1) * pagination.PageSize + 1) to
+                    @Math.Min(pagination.Page * pagination.PageSize, pagination.TotalItems) of @pagination.TotalItems
+                </span>
+                <div class="flex space-x-2">
+                    <button class="btn-secondary text-sm" disabled="@(!pagination.HasPrevious)"
+                            @onclick="() => ChangePage(pagination.Page - 1)">
+                        ← Previous
+                    </button>
+                    @for (int i = Math.Max(1, pagination.Page - 2); i <= Math.Min(pagination.TotalPages, pagination.Page + 2); i++)
+                    {
+                        var pageNum = i;
+                        <button class="@(pageNum == pagination.Page ? "btn-primary" : "btn-secondary") text-sm px-3"
+                                @onclick="() => ChangePage(pageNum)">
+                            @pageNum
+                        </button>
+                    }
+                    <button class="btn-secondary text-sm" disabled="@(!pagination.HasNext)"
+                            @onclick="() => ChangePage(pagination.Page + 1)">
+                        Next →
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<AuditLogDto>? logs;
+    private AuditStatsDto? stats;
+    private List<string>? actionTypes;
+    private PaginationMeta? pagination;
+
+    private string? errorMessage;
+    private string filterAction = "";
+    private string filterEntityType = "";
+    private DateTime? filterFrom;
+    private DateTime? filterTo;
+    private int currentPage = 1;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        await Task.WhenAll(
+            LoadLogsAsync(),
+            LoadStatsAsync(),
+            LoadActionTypesAsync()
+        );
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var url = $"api/v1/audit?page={currentPage}&pageSize=50";
+
+            if (!string.IsNullOrEmpty(filterAction))
+                url += $"&action={Uri.EscapeDataString(filterAction)}";
+            if (!string.IsNullOrEmpty(filterEntityType))
+                url += $"&entityType={filterEntityType}";
+            if (filterFrom.HasValue)
+                url += $"&from={filterFrom.Value:yyyy-MM-dd}";
+            if (filterTo.HasValue)
+                url += $"&to={filterTo.Value:yyyy-MM-dd}";
+
+            var response = await Http.GetFromJsonAsync<ApiResponse<PagedResponse<AuditLogDto>>>(url);
+            if (response?.Success == true && response.Data != null)
+            {
+                logs = response.Data.Data;
+                pagination = response.Data.Pagination;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load audit logs: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<ApiResponse<AuditStatsDto>>("api/v1/audit/stats");
+            if (response?.Success == true)
+            {
+                stats = response.Data;
+            }
+        }
+        catch { }
+    }
+
+    private async Task LoadActionTypesAsync()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<ApiResponse<List<string>>>("api/v1/audit/actions");
+            if (response?.Success == true)
+            {
+                actionTypes = response.Data;
+            }
+        }
+        catch { }
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1;
+        await LoadLogsAsync();
+    }
+
+    private async Task ChangePage(int page)
+    {
+        currentPage = page;
+        await LoadLogsAsync();
+    }
+
+    private async Task ExportLogs(string format)
+    {
+        try
+        {
+            var url = $"api/v1/audit/export?format={format}";
+            if (filterFrom.HasValue)
+                url += $"&from={filterFrom.Value:yyyy-MM-dd}";
+            if (filterTo.HasValue)
+                url += $"&to={filterTo.Value:yyyy-MM-dd}";
+
+            // Trigger download
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Export failed: {ex.Message}";
+        }
+    }
+}
