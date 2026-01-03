@@ -25,6 +25,13 @@ public class ApiResponse<T>
         Errors = [error]
     };
 
+    public static ApiResponse<T> Fail(string error, T? data) => new()
+    {
+        Success = false,
+        Data = data,
+        Errors = [error]
+    };
+
     public static ApiResponse<T> Fail(List<string> errors) => new()
     {
         Success = false,
