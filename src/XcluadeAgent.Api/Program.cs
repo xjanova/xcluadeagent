@@ -191,7 +191,7 @@ builder.Services.AddSwaggerGen(c =>
 // SignalR
 builder.Services.AddSignalR();
 
-// CORS
+// CORS - Restrict to specific methods and headers
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowDashboard", policy =>
@@ -200,9 +200,47 @@ builder.Services.AddCors(options =>
             ?? ["http://localhost:5000", "http://localhost:3000"];
 
         policy.WithOrigins(origins)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
+            .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            .WithHeaders("Content-Type", "Authorization", "X-Requested-With")
             .AllowCredentials();
+    });
+});
+
+// Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+
+    // Global rate limit - 100 requests per minute
+    options.AddFixedWindowLimiter("global", opt =>
+    {
+        opt.PermitLimit = 100;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 10;
+    });
+
+    // Auth rate limit - 10 login attempts per minute
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit = 10;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+    });
+
+    // Sync rate limit - 5 sync requests per minute per project
+    options.AddFixedWindowLimiter("sync", opt =>
+    {
+        opt.PermitLimit = 5;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 2;
+    });
+
+    // Webhook rate limit - 30 webhook requests per minute (generous for GitHub)
+    options.AddFixedWindowLimiter("webhook", opt =>
+    {
+        opt.PermitLimit = 30;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 5;
     });
 });
 
@@ -233,6 +271,7 @@ if (app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseCors("AllowDashboard");
 app.UseRouting();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -255,9 +294,12 @@ app.MapGet("/health", () => Results.Ok(new
     timestamp = DateTime.UtcNow
 }));
 
-// Webhook endpoint for GitHub
+// Webhook endpoint for GitHub (rate limited)
 app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHubService, ISyncService syncService, IProjectRepository projectRepository, ILogger<Program> logger) =>
 {
+    // Log webhook request for security auditing
+    var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
     try
     {
         // Read the request body
@@ -337,7 +379,7 @@ app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHub
                     {
                         try
                         {
-                            await syncService.SyncProjectAsync(project.Id, "webhook", default);
+                            await syncService.SyncAsync(project.Id, XcluadeAgent.Core.Enums.SyncTrigger.Webhook, "webhook", default);
                         }
                         catch (Exception ex)
                         {
@@ -362,7 +404,7 @@ app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHub
                         {
                             try
                             {
-                                await syncService.SyncProjectAsync(project.Id, "webhook", default);
+                                await syncService.SyncAsync(project.Id, XcluadeAgent.Core.Enums.SyncTrigger.Webhook, "webhook", default);
                             }
                             catch (Exception ex)
                             {
@@ -382,19 +424,21 @@ app.MapPost("/webhook/github", async (HttpContext context, IGitHubService gitHub
                 break;
         }
 
+        logger.LogInformation("Webhook processed successfully from {ClientIp}. Project: {Project}, Event: {Event}",
+            clientIp, project.Name, eventType);
         return Results.Ok(new { message = "Webhook processed", project = project.Name, eventType });
     }
     catch (System.Text.Json.JsonException ex)
     {
-        Log.Warning(ex, "Invalid JSON in webhook payload");
+        logger.LogWarning(ex, "Invalid JSON in webhook payload from {ClientIp}", clientIp);
         return Results.BadRequest(new { error = "Invalid JSON payload" });
     }
     catch (Exception ex)
     {
-        Log.Error(ex, "Error processing webhook");
+        logger.LogError(ex, "Error processing webhook from {ClientIp}", clientIp);
         return Results.Problem("Internal server error processing webhook");
     }
-});
+}).RequireRateLimiting("webhook");
 
 var port = builder.Configuration.GetValue("Server:Port", 5000);
 var host = builder.Configuration.GetValue("Server:Host", "0.0.0.0");

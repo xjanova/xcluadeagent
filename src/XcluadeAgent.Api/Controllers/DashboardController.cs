@@ -132,6 +132,37 @@ public class DashboardController : ControllerBase
         return Ok(ApiResponse<AiStatusDto>.Ok(status));
     }
 
+    /// <summary>
+    /// Get all sync history
+    /// </summary>
+    [HttpGet("history")]
+    public async Task<ActionResult<ApiResponse<List<SyncHistoryDto>>>> GetHistory([FromQuery] int limit = 100)
+    {
+        var history = (await _syncHistoryRepository.GetRecentAsync(limit)).ToList();
+
+        var dtos = history.Select(h => new SyncHistoryDto
+        {
+            Id = h.Id,
+            ProjectId = h.ProjectId,
+            ProjectName = h.ProjectName,
+            FromVersion = h.FromVersion,
+            ToVersion = h.ToVersion,
+            Success = h.Success,
+            ErrorMessage = h.ErrorMessage,
+            FilesChanged = h.FilesChanged,
+            BytesTransferred = FormatBytes(h.BytesTransferred),
+            Duration = FormatDuration(h.DurationMs),
+            Trigger = h.Trigger.ToString(),
+            InitiatedBy = h.InitiatedBy,
+            StartedAt = h.StartedAt,
+            CompletedAt = h.CompletedAt,
+            IsRollback = h.IsRollback,
+            HasBackup = !string.IsNullOrEmpty(h.BackupPath)
+        }).ToList();
+
+        return Ok(ApiResponse<List<SyncHistoryDto>>.Ok(dtos));
+    }
+
     #region Private Methods
 
     private SystemHealthDto GetSystemHealth()
@@ -255,6 +286,14 @@ public class DashboardController : ControllerBase
         if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
         if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024):F1} MB";
         return $"{bytes / (1024.0 * 1024 * 1024):F2} GB";
+    }
+
+    private static string FormatDuration(long? ms)
+    {
+        if (!ms.HasValue) return "-";
+        if (ms < 1000) return $"{ms}ms";
+        if (ms < 60000) return $"{ms / 1000.0:F1}s";
+        return $"{ms / 60000.0:F1}m";
     }
 
     private static string GetUptime()

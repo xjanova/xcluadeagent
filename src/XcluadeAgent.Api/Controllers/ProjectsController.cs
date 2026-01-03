@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using XcluadeAgent.Core.Enums;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Core.Models;
 using XcluadeAgent.Shared.DTOs;
+using XcluadeAgent.Shared.Security;
 
 namespace XcluadeAgent.Api.Controllers;
 
@@ -15,6 +17,7 @@ public class ProjectsController : ControllerBase
     private readonly IProjectRepository _projectRepository;
     private readonly ISyncHistoryRepository _syncHistoryRepository;
     private readonly IGitHubService _gitHubService;
+    private readonly ISyncService _syncService;
     private readonly ILicenseService _licenseService;
     private readonly ILogger<ProjectsController> _logger;
 
@@ -22,12 +25,14 @@ public class ProjectsController : ControllerBase
         IProjectRepository projectRepository,
         ISyncHistoryRepository syncHistoryRepository,
         IGitHubService gitHubService,
+        ISyncService syncService,
         ILicenseService licenseService,
         ILogger<ProjectsController> logger)
     {
         _projectRepository = projectRepository;
         _syncHistoryRepository = syncHistoryRepository;
         _gitHubService = gitHubService;
+        _syncService = syncService;
         _licenseService = licenseService;
         _logger = logger;
     }
@@ -85,6 +90,19 @@ public class ProjectsController : ControllerBase
             return BadRequest(ApiResponse<ProjectDto>.Fail("A project with this name already exists"));
         }
 
+        // Validate local path for security (path traversal prevention)
+        if (!PathValidator.IsSafePath(request.LocalPath))
+        {
+            _logger.LogWarning("Rejected project creation with unsafe path: {Path}", request.LocalPath);
+            return BadRequest(ApiResponse<ProjectDto>.Fail("Invalid local path. Path must be absolute and cannot contain traversal sequences."));
+        }
+
+        if (!PathValidator.IsPathInAllowedDirectory(request.LocalPath))
+        {
+            _logger.LogWarning("Rejected project creation with path outside allowed directories: {Path}", request.LocalPath);
+            return BadRequest(ApiResponse<ProjectDto>.Fail("Local path must be within allowed directories (/var/www, /home, /srv, /opt, /data)."));
+        }
+
         var project = new Project
         {
             Name = request.Name,
@@ -138,6 +156,22 @@ public class ProjectsController : ControllerBase
             return NotFound(ApiResponse<ProjectDto>.Fail("Project not found"));
         }
 
+        // Validate local path if being updated (path traversal prevention)
+        if (!string.IsNullOrEmpty(request.LocalPath))
+        {
+            if (!PathValidator.IsSafePath(request.LocalPath))
+            {
+                _logger.LogWarning("Rejected project update with unsafe path: {Path}", request.LocalPath);
+                return BadRequest(ApiResponse<ProjectDto>.Fail("Invalid local path. Path must be absolute and cannot contain traversal sequences."));
+            }
+
+            if (!PathValidator.IsPathInAllowedDirectory(request.LocalPath))
+            {
+                _logger.LogWarning("Rejected project update with path outside allowed directories: {Path}", request.LocalPath);
+                return BadRequest(ApiResponse<ProjectDto>.Fail("Local path must be within allowed directories (/var/www, /home, /srv, /opt, /data)."));
+            }
+        }
+
         // Update fields
         if (!string.IsNullOrEmpty(request.Name)) project.Name = request.Name;
         if (request.Description != null) project.Description = request.Description;
@@ -182,6 +216,92 @@ public class ProjectsController : ControllerBase
         _logger.LogInformation("Project deleted: {Name} ({Id})", project.Name, id);
 
         return Ok(ApiResponse.Ok("Project deleted successfully"));
+    }
+
+    /// <summary>
+    /// Trigger project sync
+    /// </summary>
+    [HttpPost("{id:guid}/sync")]
+    [EnableRateLimiting("sync")]
+    public async Task<ActionResult<ApiResponse<SyncHistoryDto>>> Sync(Guid id, CancellationToken cancellationToken)
+    {
+        var project = await _projectRepository.GetByIdAsync(id);
+        if (project == null)
+        {
+            return NotFound(ApiResponse<SyncHistoryDto>.Fail("Project not found"));
+        }
+
+        if (!project.Enabled)
+        {
+            return BadRequest(ApiResponse<SyncHistoryDto>.Fail("Project is disabled"));
+        }
+
+        var username = User.Identity?.Name ?? "system";
+
+        try
+        {
+            _logger.LogInformation("Sync triggered for project {Name} by {User}", project.Name, username);
+
+            var result = await _syncService.SyncAsync(id, SyncTrigger.Manual, username, cancellationToken);
+
+            if (result.Success)
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Ok(MapHistoryToDto(result), "Sync completed successfully"));
+            }
+            else
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Fail(result.ErrorMessage ?? "Sync failed", MapHistoryToDto(result)));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Sync failed for project {Name}", project.Name);
+            return StatusCode(500, ApiResponse<SyncHistoryDto>.Fail($"Sync failed: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Trigger project rollback
+    /// </summary>
+    [HttpPost("{id:guid}/rollback/{historyId:guid}")]
+    [EnableRateLimiting("sync")]
+    public async Task<ActionResult<ApiResponse<SyncHistoryDto>>> Rollback(Guid id, Guid historyId, CancellationToken cancellationToken)
+    {
+        var project = await _projectRepository.GetByIdAsync(id);
+        if (project == null)
+        {
+            return NotFound(ApiResponse<SyncHistoryDto>.Fail("Project not found"));
+        }
+
+        var history = await _syncHistoryRepository.GetByIdAsync(historyId);
+        if (history == null || history.ProjectId != id)
+        {
+            return NotFound(ApiResponse<SyncHistoryDto>.Fail("Sync history not found"));
+        }
+
+        var username = User.Identity?.Name ?? "system";
+
+        try
+        {
+            _logger.LogInformation("Rollback triggered for project {Name} to {Version} by {User}",
+                project.Name, history.ToVersion, username);
+
+            var result = await _syncService.RollbackAsync(id, historyId, username, cancellationToken);
+
+            if (result.Success)
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Ok(MapHistoryToDto(result), "Rollback completed successfully"));
+            }
+            else
+            {
+                return Ok(ApiResponse<SyncHistoryDto>.Fail(result.ErrorMessage ?? "Rollback failed", MapHistoryToDto(result)));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Rollback failed for project {Name}", project.Name);
+            return StatusCode(500, ApiResponse<SyncHistoryDto>.Fail($"Rollback failed: {ex.Message}"));
+        }
     }
 
     /// <summary>
@@ -313,6 +433,19 @@ public class ProjectsController : ControllerBase
         BytesTransferred = FormatBytes(history.BytesTransferred),
         IsRollback = history.IsRollback,
         HasBackup = !string.IsNullOrEmpty(history.BackupPath)
+    };
+
+    private static SyncHistoryDto MapHistoryToDto(SyncResult result) => new()
+    {
+        Id = result.HistoryId ?? Guid.Empty,
+        ToVersion = result.Version,
+        Success = result.Success,
+        ErrorMessage = result.ErrorMessage,
+        FilesChanged = result.FilesChanged,
+        BytesTransferred = FormatBytes(result.BytesTransferred),
+        Duration = FormatDuration(result.DurationMs),
+        HasBackup = !string.IsNullOrEmpty(result.BackupPath),
+        IsRollback = result.RolledBack
     };
 
     private static ProjectConfig MapFromConfigDto(ProjectConfigDto dto) => new()
