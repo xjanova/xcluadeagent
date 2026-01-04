@@ -322,7 +322,7 @@ public class SettingsController : ControllerBase
         var userId = User.FindFirst("uid")?.Value;
         var username = User.Identity?.Name ?? "system";
 
-        await _auditLogRepository.AddAsync(new AuditLog
+        await _auditLogRepository.CreateAsync(new AuditLog
         {
             UserId = Guid.TryParse(userId, out var uid) ? uid : null,
             Username = username,
