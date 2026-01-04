@@ -155,9 +155,11 @@ public class AuditLog
     public string Action { get; set; } = string.Empty;
     public string? EntityType { get; set; }
     public Guid? EntityId { get; set; }
+    public string? Details { get; set; }
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
