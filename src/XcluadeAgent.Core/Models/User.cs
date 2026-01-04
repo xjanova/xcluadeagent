@@ -95,6 +95,21 @@ public class User
     public string? GitHubUsername { get; set; }
 
     /// <summary>
+    /// GitHub OAuth access token (encrypted)
+    /// </summary>
+    public string? GitHubAccessToken { get; set; }
+
+    /// <summary>
+    /// GitHub OAuth token scopes
+    /// </summary>
+    public string? GitHubTokenScopes { get; set; }
+
+    /// <summary>
+    /// When the GitHub account was linked
+    /// </summary>
+    public DateTime? GitHubLinkedAt { get; set; }
+
+    /// <summary>
     /// Notification preferences
     /// </summary>
     public UserNotificationSettings NotificationSettings { get; set; } = new();

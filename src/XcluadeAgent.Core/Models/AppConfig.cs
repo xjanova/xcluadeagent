@@ -122,6 +122,38 @@ public class GitHubConfig
     /// </summary>
     public int RetryCount { get; set; } = 3;
     public int RetryDelayMs { get; set; } = 1000;
+
+    /// <summary>
+    /// OAuth configuration for one-click setup
+    /// </summary>
+    public GitHubOAuthConfig OAuth { get; set; } = new();
+}
+
+/// <summary>
+/// GitHub OAuth configuration
+/// </summary>
+public class GitHubOAuthConfig
+{
+    /// <summary>
+    /// GitHub OAuth App Client ID
+    /// </summary>
+    public string? ClientId { get; set; }
+
+    /// <summary>
+    /// GitHub OAuth App Client Secret
+    /// </summary>
+    public string? ClientSecret { get; set; }
+
+    /// <summary>
+    /// OAuth scopes to request (comma-separated)
+    /// Default: repo,read:user,user:email for full repository access
+    /// </summary>
+    public string Scopes { get; set; } = "repo,read:user,user:email";
+
+    /// <summary>
+    /// Whether OAuth is enabled
+    /// </summary>
+    public bool IsConfigured => !string.IsNullOrEmpty(ClientId) && !string.IsNullOrEmpty(ClientSecret);
 }
 
 /// <summary>

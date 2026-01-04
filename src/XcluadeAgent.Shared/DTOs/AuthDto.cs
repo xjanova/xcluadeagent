@@ -162,3 +162,49 @@ public class Disable2FARequest
     [Required(ErrorMessage = "Password is required")]
     public string Password { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// GitHub OAuth authorization URL response
+/// </summary>
+public class GitHubOAuthUrlResponse
+{
+    public string AuthorizationUrl { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// GitHub OAuth callback request
+/// </summary>
+public class GitHubOAuthCallbackRequest
+{
+    [Required(ErrorMessage = "Authorization code is required")]
+    public string Code { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "State is required")]
+    public string State { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// GitHub OAuth status response
+/// </summary>
+public class GitHubOAuthStatusResponse
+{
+    public bool IsLinked { get; set; }
+    public string? GitHubUsername { get; set; }
+    public string? GitHubId { get; set; }
+    public DateTime? LinkedAt { get; set; }
+    public string? TokenScopes { get; set; }
+    public bool IsOAuthConfigured { get; set; }
+}
+
+/// <summary>
+/// GitHub OAuth link response after successful authorization
+/// </summary>
+public class GitHubOAuthLinkResponse
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public string? GitHubUsername { get; set; }
+    public string? GitHubId { get; set; }
+    public string? Scopes { get; set; }
+}

@@ -1,10 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using XcluadeAgent.Core.Interfaces;
@@ -23,6 +25,9 @@ public class AuthController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly ITwoFactorService _twoFactorService;
+    private readonly IGitHubOAuthService _gitHubOAuthService;
+    private readonly ITokenEncryptionService _tokenEncryption;
+    private readonly IMemoryCache _cache;
     private readonly SecurityConfig _securityConfig;
     private readonly ILogger<AuthController> _logger;
 
@@ -30,12 +35,18 @@ public class AuthController : ControllerBase
         IUserRepository userRepository,
         IAuditLogRepository auditLogRepository,
         ITwoFactorService twoFactorService,
+        IGitHubOAuthService gitHubOAuthService,
+        ITokenEncryptionService tokenEncryption,
+        IMemoryCache cache,
         IOptions<SecurityConfig> securityConfig,
         ILogger<AuthController> logger)
     {
         _userRepository = userRepository;
         _auditLogRepository = auditLogRepository;
         _twoFactorService = twoFactorService;
+        _gitHubOAuthService = gitHubOAuthService;
+        _tokenEncryption = tokenEncryption;
+        _cache = cache;
         _securityConfig = securityConfig.Value;
         _logger = logger;
     }
@@ -534,6 +545,302 @@ public class AuthController : ControllerBase
         return Ok(ApiResponse.Ok("Two-factor authentication disabled"));
     }
 
+    #region GitHub OAuth - One Click Setup
+
+    /// <summary>
+    /// Get GitHub OAuth status for current user
+    /// </summary>
+    [HttpGet("github/status")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponse<GitHubOAuthStatusResponse>>> GetGitHubStatus()
+    {
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var id))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userRepository.GetByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(ApiResponse<GitHubOAuthStatusResponse>.Ok(new GitHubOAuthStatusResponse
+        {
+            IsLinked = !string.IsNullOrEmpty(user.GitHubId),
+            GitHubUsername = user.GitHubUsername,
+            GitHubId = user.GitHubId,
+            LinkedAt = user.GitHubLinkedAt,
+            TokenScopes = user.GitHubTokenScopes,
+            IsOAuthConfigured = _gitHubOAuthService.IsConfigured
+        }));
+    }
+
+    /// <summary>
+    /// Get GitHub OAuth authorization URL for one-click setup
+    /// </summary>
+    [HttpGet("github/authorize")]
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    public ActionResult<ApiResponse<GitHubOAuthUrlResponse>> GetGitHubAuthUrl()
+    {
+        if (!_gitHubOAuthService.IsConfigured)
+        {
+            return BadRequest(ApiResponse.Fail("GitHub OAuth is not configured. Please configure Client ID and Secret in settings."));
+        }
+
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        // Generate CSRF state token
+        var state = GenerateSecureToken();
+
+        // Store state in cache with user ID (expires in 10 minutes)
+        _cache.Set($"github_oauth_state_{state}", userId, TimeSpan.FromMinutes(10));
+
+        // Build redirect URI
+        var redirectUri = $"{Request.Scheme}://{Request.Host}/api/v1/auth/github/callback";
+
+        var authUrl = _gitHubOAuthService.GetAuthorizationUrl(state, redirectUri);
+
+        return Ok(ApiResponse<GitHubOAuthUrlResponse>.Ok(new GitHubOAuthUrlResponse
+        {
+            AuthorizationUrl = authUrl,
+            State = state
+        }));
+    }
+
+    /// <summary>
+    /// Handle GitHub OAuth callback - exchanges code for token and links account
+    /// </summary>
+    [HttpGet("github/callback")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> GitHubCallback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
+    {
+        // Handle OAuth errors
+        if (!string.IsNullOrEmpty(error))
+        {
+            _logger.LogWarning("GitHub OAuth error: {Error}", error);
+            return Redirect($"/?github_error={Uri.EscapeDataString(error)}");
+        }
+
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+        {
+            return Redirect("/?github_error=missing_parameters");
+        }
+
+        // Validate state and get user ID
+        if (!_cache.TryGetValue($"github_oauth_state_{state}", out string? userId))
+        {
+            _logger.LogWarning("Invalid or expired OAuth state: {State}", state);
+            return Redirect("/?github_error=invalid_state");
+        }
+
+        // Remove state from cache (one-time use)
+        _cache.Remove($"github_oauth_state_{state}");
+
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+        {
+            return Redirect("/?github_error=invalid_user");
+        }
+
+        // Exchange code for token
+        var redirectUri = $"{Request.Scheme}://{Request.Host}/api/v1/auth/github/callback";
+        var tokenResponse = await _gitHubOAuthService.ExchangeCodeAsync(code, redirectUri);
+
+        if (tokenResponse == null || !string.IsNullOrEmpty(tokenResponse.Error))
+        {
+            var errorMsg = tokenResponse?.ErrorDescription ?? tokenResponse?.Error ?? "token_exchange_failed";
+            _logger.LogError("GitHub token exchange failed: {Error}", errorMsg);
+            return Redirect($"/?github_error={Uri.EscapeDataString(errorMsg)}");
+        }
+
+        // Get user info from GitHub
+        var gitHubUser = await _gitHubOAuthService.GetUserInfoAsync(tokenResponse.AccessToken);
+        if (gitHubUser == null)
+        {
+            _logger.LogError("Failed to get GitHub user info");
+            return Redirect("/?github_error=user_info_failed");
+        }
+
+        // Update user with GitHub info
+        var user = await _userRepository.GetByIdAsync(userGuid);
+        if (user == null)
+        {
+            return Redirect("/?github_error=user_not_found");
+        }
+
+        user.GitHubId = gitHubUser.Id;
+        user.GitHubUsername = gitHubUser.Login;
+        user.GitHubAccessToken = _tokenEncryption.Encrypt(tokenResponse.AccessToken);
+        user.GitHubTokenScopes = tokenResponse.Scope;
+        user.GitHubLinkedAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _userRepository.UpdateAsync(user);
+
+        // Audit log
+        await _auditLogRepository.CreateAsync(new AuditLog
+        {
+            UserId = user.Id,
+            Username = user.Username,
+            Action = "GitHubLinked",
+            NewValue = $"GitHub: {gitHubUser.Login} ({gitHubUser.Id})",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        _logger.LogInformation("User {Username} linked GitHub account: {GitHubUser}", user.Username, gitHubUser.Login);
+
+        // Redirect back to dashboard with success message
+        return Redirect($"/?github_success=true&github_user={Uri.EscapeDataString(gitHubUser.Login)}");
+    }
+
+    /// <summary>
+    /// Handle GitHub OAuth callback via POST (API method for SPA)
+    /// </summary>
+    [HttpPost("github/callback")]
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<ApiResponse<GitHubOAuthLinkResponse>>> GitHubCallbackPost([FromBody] GitHubOAuthCallbackRequest request)
+    {
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var userGuid))
+        {
+            return Unauthorized();
+        }
+
+        // Validate state
+        if (!_cache.TryGetValue($"github_oauth_state_{request.State}", out string? cachedUserId) ||
+            cachedUserId != userId)
+        {
+            return BadRequest(ApiResponse<GitHubOAuthLinkResponse>.Fail("Invalid or expired state token"));
+        }
+
+        // Remove state from cache
+        _cache.Remove($"github_oauth_state_{request.State}");
+
+        // Exchange code for token
+        var redirectUri = $"{Request.Scheme}://{Request.Host}/api/v1/auth/github/callback";
+        var tokenResponse = await _gitHubOAuthService.ExchangeCodeAsync(request.Code, redirectUri);
+
+        if (tokenResponse == null || !string.IsNullOrEmpty(tokenResponse.Error))
+        {
+            return BadRequest(ApiResponse<GitHubOAuthLinkResponse>.Fail(
+                tokenResponse?.ErrorDescription ?? "Failed to exchange authorization code"));
+        }
+
+        // Get user info
+        var gitHubUser = await _gitHubOAuthService.GetUserInfoAsync(tokenResponse.AccessToken);
+        if (gitHubUser == null)
+        {
+            return BadRequest(ApiResponse<GitHubOAuthLinkResponse>.Fail("Failed to get GitHub user information"));
+        }
+
+        // Update user
+        var user = await _userRepository.GetByIdAsync(userGuid);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        user.GitHubId = gitHubUser.Id;
+        user.GitHubUsername = gitHubUser.Login;
+        user.GitHubAccessToken = _tokenEncryption.Encrypt(tokenResponse.AccessToken);
+        user.GitHubTokenScopes = tokenResponse.Scope;
+        user.GitHubLinkedAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _userRepository.UpdateAsync(user);
+
+        await _auditLogRepository.CreateAsync(new AuditLog
+        {
+            UserId = user.Id,
+            Username = user.Username,
+            Action = "GitHubLinked",
+            NewValue = $"GitHub: {gitHubUser.Login} ({gitHubUser.Id})",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        _logger.LogInformation("User {Username} linked GitHub account via API: {GitHubUser}", user.Username, gitHubUser.Login);
+
+        return Ok(ApiResponse<GitHubOAuthLinkResponse>.Ok(new GitHubOAuthLinkResponse
+        {
+            Success = true,
+            Message = "GitHub account linked successfully",
+            GitHubUsername = gitHubUser.Login,
+            GitHubId = gitHubUser.Id,
+            Scopes = tokenResponse.Scope
+        }));
+    }
+
+    /// <summary>
+    /// Unlink GitHub account from current user
+    /// </summary>
+    [HttpPost("github/unlink")]
+    [Authorize]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<ApiResponse>> UnlinkGitHub()
+    {
+        var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
+        if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var id))
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userRepository.GetByIdAsync(id);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrEmpty(user.GitHubId))
+        {
+            return BadRequest(ApiResponse.Fail("GitHub account is not linked"));
+        }
+
+        var oldGitHubUsername = user.GitHubUsername;
+
+        // Revoke token if possible (decrypt first)
+        if (!string.IsNullOrEmpty(user.GitHubAccessToken))
+        {
+            var decryptedToken = _tokenEncryption.Decrypt(user.GitHubAccessToken);
+            if (!string.IsNullOrEmpty(decryptedToken))
+            {
+                await _gitHubOAuthService.RevokeTokenAsync(decryptedToken);
+            }
+        }
+
+        // Clear GitHub data
+        user.GitHubId = null;
+        user.GitHubUsername = null;
+        user.GitHubAccessToken = null;
+        user.GitHubTokenScopes = null;
+        user.GitHubLinkedAt = null;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _userRepository.UpdateAsync(user);
+
+        await _auditLogRepository.CreateAsync(new AuditLog
+        {
+            UserId = user.Id,
+            Username = user.Username,
+            Action = "GitHubUnlinked",
+            OldValue = $"GitHub: {oldGitHubUsername}",
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        });
+
+        _logger.LogInformation("User {Username} unlinked GitHub account: {GitHubUser}", user.Username, oldGitHubUsername);
+
+        return Ok(ApiResponse.Ok("GitHub account unlinked successfully"));
+    }
+
+    #endregion
+
     #region Private Methods
 
     private string GenerateJwtToken(User user)
@@ -564,9 +871,17 @@ public class AuthController : ControllerBase
     private string GenerateRefreshToken()
     {
         var randomBytes = new byte[32];
-        using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+        using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomBytes);
         return Convert.ToBase64String(randomBytes);
+    }
+
+    private static string GenerateSecureToken()
+    {
+        var randomBytes = new byte[32];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomBytes);
+        return Convert.ToHexString(randomBytes).ToLowerInvariant();
     }
 
     private static UserDto MapToDto(User user) => new()
