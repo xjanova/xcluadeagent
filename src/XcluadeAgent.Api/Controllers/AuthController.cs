@@ -26,6 +26,7 @@ public class AuthController : ControllerBase
     private readonly IAuditLogRepository _auditLogRepository;
     private readonly ITwoFactorService _twoFactorService;
     private readonly IGitHubOAuthService _gitHubOAuthService;
+    private readonly ITokenEncryptionService _tokenEncryption;
     private readonly IMemoryCache _cache;
     private readonly SecurityConfig _securityConfig;
     private readonly ILogger<AuthController> _logger;
@@ -35,6 +36,7 @@ public class AuthController : ControllerBase
         IAuditLogRepository auditLogRepository,
         ITwoFactorService twoFactorService,
         IGitHubOAuthService gitHubOAuthService,
+        ITokenEncryptionService tokenEncryption,
         IMemoryCache cache,
         IOptions<SecurityConfig> securityConfig,
         ILogger<AuthController> logger)
@@ -43,6 +45,7 @@ public class AuthController : ControllerBase
         _auditLogRepository = auditLogRepository;
         _twoFactorService = twoFactorService;
         _gitHubOAuthService = gitHubOAuthService;
+        _tokenEncryption = tokenEncryption;
         _cache = cache;
         _securityConfig = securityConfig.Value;
         _logger = logger;
@@ -579,6 +582,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpGet("github/authorize")]
     [Authorize]
+    [EnableRateLimiting("auth")]
     public ActionResult<ApiResponse<GitHubOAuthUrlResponse>> GetGitHubAuthUrl()
     {
         if (!_gitHubOAuthService.IsConfigured)
@@ -615,6 +619,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpGet("github/callback")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     public async Task<IActionResult> GitHubCallback([FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
     {
         // Handle OAuth errors
@@ -672,7 +677,7 @@ public class AuthController : ControllerBase
 
         user.GitHubId = gitHubUser.Id;
         user.GitHubUsername = gitHubUser.Login;
-        user.GitHubAccessToken = tokenResponse.AccessToken; // In production, encrypt this
+        user.GitHubAccessToken = _tokenEncryption.Encrypt(tokenResponse.AccessToken);
         user.GitHubTokenScopes = tokenResponse.Scope;
         user.GitHubLinkedAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
@@ -700,6 +705,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("github/callback")]
     [Authorize]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<ApiResponse<GitHubOAuthLinkResponse>>> GitHubCallbackPost([FromBody] GitHubOAuthCallbackRequest request)
     {
         var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
@@ -744,7 +750,7 @@ public class AuthController : ControllerBase
 
         user.GitHubId = gitHubUser.Id;
         user.GitHubUsername = gitHubUser.Login;
-        user.GitHubAccessToken = tokenResponse.AccessToken;
+        user.GitHubAccessToken = _tokenEncryption.Encrypt(tokenResponse.AccessToken);
         user.GitHubTokenScopes = tokenResponse.Scope;
         user.GitHubLinkedAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
@@ -777,6 +783,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("github/unlink")]
     [Authorize]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<ApiResponse>> UnlinkGitHub()
     {
         var userId = User.FindFirst(CustomClaimTypes.UserId)?.Value;
@@ -798,10 +805,14 @@ public class AuthController : ControllerBase
 
         var oldGitHubUsername = user.GitHubUsername;
 
-        // Revoke token if possible
+        // Revoke token if possible (decrypt first)
         if (!string.IsNullOrEmpty(user.GitHubAccessToken))
         {
-            await _gitHubOAuthService.RevokeTokenAsync(user.GitHubAccessToken);
+            var decryptedToken = _tokenEncryption.Decrypt(user.GitHubAccessToken);
+            if (!string.IsNullOrEmpty(decryptedToken))
+            {
+                await _gitHubOAuthService.RevokeTokenAsync(decryptedToken);
+            }
         }
 
         // Clear GitHub data

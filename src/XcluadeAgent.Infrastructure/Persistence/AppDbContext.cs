@@ -94,8 +94,11 @@ public class AppDbContext : DbContext
             entity.Property(e => e.DisplayName).HasMaxLength(100);
             entity.Property(e => e.LastLoginIp).HasMaxLength(50);
             entity.Property(e => e.TwoFactorSecret).HasMaxLength(100);
+            entity.Property(e => e.RefreshToken).HasMaxLength(100);
             entity.Property(e => e.GitHubId).HasMaxLength(50);
             entity.Property(e => e.GitHubUsername).HasMaxLength(50);
+            entity.Property(e => e.GitHubAccessToken).HasMaxLength(500);
+            entity.Property(e => e.GitHubTokenScopes).HasMaxLength(200);
 
             entity.OwnsOne(e => e.NotificationSettings, ns =>
             {

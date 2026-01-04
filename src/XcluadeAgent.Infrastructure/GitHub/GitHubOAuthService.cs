@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XcluadeAgent.Core.Interfaces;
@@ -265,26 +266,49 @@ public class GitHubOAuthService : IGitHubOAuthService
 
     private class GitHubTokenResponseInternal
     {
+        [JsonPropertyName("access_token")]
         public string? AccessToken { get; set; }
+
+        [JsonPropertyName("token_type")]
         public string? TokenType { get; set; }
+
+        [JsonPropertyName("scope")]
         public string? Scope { get; set; }
+
+        [JsonPropertyName("error")]
         public string? Error { get; set; }
+
+        [JsonPropertyName("error_description")]
         public string? ErrorDescription { get; set; }
     }
 
     private class GitHubUserResponseInternal
     {
+        [JsonPropertyName("id")]
         public long Id { get; set; }
+
+        [JsonPropertyName("login")]
         public string? Login { get; set; }
+
+        [JsonPropertyName("name")]
         public string? Name { get; set; }
+
+        [JsonPropertyName("email")]
         public string? Email { get; set; }
+
+        [JsonPropertyName("avatar_url")]
         public string? AvatarUrl { get; set; }
     }
 
     private class GitHubEmailInternal
     {
+        [JsonPropertyName("email")]
         public string Email { get; set; } = string.Empty;
+
+        [JsonPropertyName("primary")]
         public bool Primary { get; set; }
+
+        [JsonPropertyName("verified")]
         public bool Verified { get; set; }
     }
 
