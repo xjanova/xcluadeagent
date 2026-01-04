@@ -22,6 +22,28 @@ DATA_DIR="/var/lib/xcluadeagent"
 SERVICE_USER="xcluade"
 REPO_URL="https://github.com/xjanova/xcluadeagent.git"
 
+# Spinner function for long-running tasks
+spinner() {
+    local pid=$1
+    local msg=$2
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+    while kill -0 $pid 2>/dev/null; do
+        printf "\r${YELLOW}${spin:$i:1}${NC} $msg"
+        i=$(( (i+1) % ${#spin} ))
+        sleep 0.1
+    done
+    wait $pid
+    local status=$?
+    printf "\r"
+    if [ $status -eq 0 ]; then
+        echo -e "${GREEN}✓${NC} $msg"
+    else
+        echo -e "${RED}✗${NC} $msg"
+        exit 1
+    fi
+}
+
 # Check root
 if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}Error: Run with sudo${NC}"
@@ -38,37 +60,46 @@ echo -e "${NC}"
 
 # Step 1: Dependencies
 echo -e "${BLUE}[1/6]${NC} Installing dependencies..."
-apt-get update -qq
-apt-get install -y -qq curl wget git unzip apt-transport-https software-properties-common
+apt-get update -qq &>/dev/null &
+spinner $! "Updating package list..."
+apt-get install -y -qq curl wget git unzip apt-transport-https software-properties-common &>/dev/null &
+spinner $! "Installing required packages..."
 
 # Step 2: .NET 8
 echo -e "${BLUE}[2/6]${NC} Installing .NET 8..."
 if ! command -v dotnet &> /dev/null || [[ ! $(dotnet --version 2>/dev/null) == 8.* ]]; then
     . /etc/os-release
-    wget -q "https://packages.microsoft.com/config/$ID/$VERSION_ID/packages-microsoft-prod.deb" -O /tmp/ms-prod.deb
-    dpkg -i /tmp/ms-prod.deb
-    rm /tmp/ms-prod.deb
-    apt-get update -qq
-    apt-get install -y -qq dotnet-sdk-8.0
+    (wget -q "https://packages.microsoft.com/config/$ID/$VERSION_ID/packages-microsoft-prod.deb" -O /tmp/ms-prod.deb && \
+     dpkg -i /tmp/ms-prod.deb &>/dev/null && rm /tmp/ms-prod.deb) &
+    spinner $! "Adding Microsoft repository..."
+    apt-get update -qq &>/dev/null &
+    spinner $! "Updating package list..."
+    apt-get install -y -qq dotnet-sdk-8.0 &>/dev/null &
+    spinner $! "Installing .NET 8 SDK (this may take 2-5 minutes)..."
+else
+    echo -e "${GREEN}✓${NC} .NET 8 already installed"
 fi
-echo -e "${GREEN}✓${NC} .NET 8 ready"
 
 # Step 3: Create user & directories
 echo -e "${BLUE}[3/6]${NC} Setting up directories..."
 id -u $SERVICE_USER &>/dev/null || useradd -r -s /bin/false $SERVICE_USER
 mkdir -p $DATA_DIR/logs $DATA_DIR/backups
 chown -R $SERVICE_USER:$SERVICE_USER $DATA_DIR
+echo -e "${GREEN}✓${NC} Directories ready"
 
 # Step 4: Download
 echo -e "${BLUE}[4/6]${NC} Downloading XcluadeAgent..."
 rm -rf $INSTALL_DIR
-git clone -q --depth 1 $REPO_URL $INSTALL_DIR
+git clone -q --depth 1 $REPO_URL $INSTALL_DIR &
+spinner $! "Cloning repository..."
 
 # Step 5: Build (as root, then fix permissions)
 echo -e "${BLUE}[5/6]${NC} Building application..."
 cd $INSTALL_DIR
-dotnet restore -q
-dotnet build -c Release -q --no-restore
+dotnet restore &>/dev/null &
+spinner $! "Restoring packages (this may take 2-5 minutes)..."
+dotnet build -c Release --no-restore &>/dev/null &
+spinner $! "Building project..."
 chown -R $SERVICE_USER:$SERVICE_USER $INSTALL_DIR
 
 # Step 6: Generate config & service
