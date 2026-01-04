@@ -41,7 +41,7 @@ public class SettingsController : ControllerBase
             {
                 Port = _configuration.GetValue("Server:Port", 5000),
                 ExternalUrl = _configuration.GetValue<string>("Server:ExternalUrl"),
-                DataDirectory = _configuration.GetValue("Database:DataPath", "data")
+                DataDirectory = _configuration.GetValue<string>("Database:DataPath") ?? "data"
             },
             Sync = new SyncSettingsDto
             {
@@ -57,10 +57,10 @@ public class SettingsController : ControllerBase
             Ai = new AiSettingsDto
             {
                 Enabled = _configuration.GetValue("Ai:Enabled", false),
-                Mode = _configuration.GetValue("Ai:Mode", "Off"),
-                Provider = _configuration.GetValue("Ai:Provider", "Ollama"),
-                OllamaEndpoint = _configuration.GetValue("Ai:Ollama:Endpoint", "http://localhost:11434"),
-                OllamaModel = _configuration.GetValue("Ai:Ollama:Model", "qwen2.5-coder"),
+                Mode = _configuration.GetValue<string>("Ai:Mode") ?? "Off",
+                Provider = _configuration.GetValue<string>("Ai:Provider") ?? "Ollama",
+                OllamaEndpoint = _configuration.GetValue<string>("Ai:Ollama:Endpoint") ?? "http://localhost:11434",
+                OllamaModel = _configuration.GetValue<string>("Ai:Ollama:Model") ?? "qwen2.5-coder",
                 HasClaudeKey = !string.IsNullOrEmpty(_configuration.GetValue<string>("Ai:Claude:ApiKey")),
                 HasOpenAiKey = !string.IsNullOrEmpty(_configuration.GetValue<string>("Ai:OpenAi:ApiKey")),
                 BudgetEnabled = _configuration.GetValue("Ai:Budget:Enabled", false),
