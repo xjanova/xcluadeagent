@@ -119,7 +119,7 @@ public class AuditController : ControllerBase
 
         var stats = new AuditStatsDto
         {
-            TotalLogs = logs.Count,
+            TotalLogs = logs.Count(),
             TodayLogs = logs.Count(l => l.Timestamp >= today),
             WeekLogs = logs.Count(l => l.Timestamp >= weekAgo),
             ByAction = logs
