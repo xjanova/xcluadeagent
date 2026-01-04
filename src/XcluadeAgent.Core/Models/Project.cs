@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using XcluadeAgent.Core.Enums;
 
 namespace XcluadeAgent.Core.Models;
@@ -196,6 +197,7 @@ public class FilePermissions
     public string DefaultDirMode { get; set; } = "755";
     public string? Owner { get; set; }
     public string? Group { get; set; }
+    [NotMapped]
     public Dictionary<string, string> CustomModes { get; set; } = new();
 }
 
