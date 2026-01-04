@@ -28,7 +28,7 @@ database:
 
 # GitHub Configuration
 github:
-  # Personal Access Token (required)
+  # Personal Access Token (optional if using OAuth)
   # Create at: https://github.com/settings/tokens
   # Required scopes: repo (for private repos)
   accessToken: ${GITHUB_TOKEN}
@@ -41,6 +41,18 @@ github:
 
   retryCount: 3
   retryDelayMs: 1000
+
+  # OAuth Configuration for One-Click Setup
+  # Create a GitHub OAuth App at: https://github.com/settings/developers
+  # Set callback URL to: https://your-domain.com/api/v1/auth/github/callback
+  oauth:
+    clientId: ${GITHUB_OAUTH_CLIENT_ID}
+    clientSecret: ${GITHUB_OAUTH_CLIENT_SECRET}
+    # OAuth scopes to request (comma-separated)
+    # repo: Full control of private repositories
+    # read:user: Read user profile data
+    # user:email: Access user email addresses
+    scopes: repo,read:user,user:email
 
 # AI Configuration
 ai:

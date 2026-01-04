@@ -86,6 +86,7 @@ builder.Services.AddHttpClient("GitHub", client =>
 
 // Services
 builder.Services.AddScoped<IGitHubService, GitHubService>();
+builder.Services.AddScoped<IGitHubOAuthService, GitHubOAuthService>();
 builder.Services.AddScoped<IAiService, AiService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
