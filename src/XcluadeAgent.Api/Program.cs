@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -65,12 +66,75 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+// Resolve JWT Secret early (before binding SecurityConfig)
+// Priority: 1) Config/Environment variable, 2) Persisted secret file, 3) Auto-generate new secret
+var jwtSecret = builder.Configuration.GetValue<string>("Security:JwtSecret");
+var jwtSecretFilePath = Path.Combine(builder.Configuration["DataPath"] ?? "data", ".jwt-secret");
+
+if (string.IsNullOrEmpty(jwtSecret))
+{
+    // Try to load from persisted secret file
+    if (File.Exists(jwtSecretFilePath))
+    {
+        jwtSecret = File.ReadAllText(jwtSecretFilePath).Trim();
+        Log.Information("JWT secret loaded from persisted file");
+    }
+
+    // Generate new secret if still not available
+    if (string.IsNullOrEmpty(jwtSecret))
+    {
+        Log.Warning("JWT secret not configured. Generating a secure random secret...");
+        Log.Warning("For production, set Security:JwtSecret in config or XCLUADE_SECURITY__JWTSECRET environment variable");
+
+        // Generate a cryptographically secure random secret (32 bytes = 256 bits)
+        var randomBytes = new byte[32];
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(randomBytes);
+        }
+        jwtSecret = Convert.ToBase64String(randomBytes);
+
+        // Persist the generated secret so it survives restarts
+        try
+        {
+            var dataDir = Path.GetDirectoryName(jwtSecretFilePath);
+            if (!string.IsNullOrEmpty(dataDir) && !Directory.Exists(dataDir))
+            {
+                Directory.CreateDirectory(dataDir);
+            }
+            File.WriteAllText(jwtSecretFilePath, jwtSecret);
+            // Set restrictive permissions on Unix systems
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(jwtSecretFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+            Log.Information("Generated JWT secret persisted to {Path}", jwtSecretFilePath);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Failed to persist JWT secret to file. Secret will be regenerated on restart, invalidating existing tokens");
+        }
+    }
+}
+
+// Store resolved secret for use in configuration
+var resolvedJwtSecret = jwtSecret ?? throw new InvalidOperationException(
+    "Failed to initialize JWT secret. This should not happen - please report this issue.");
+
 // Bind configuration sections
 builder.Services.Configure<AppConfig>(builder.Configuration);
 builder.Services.Configure<GitHubConfig>(builder.Configuration.GetSection("GitHub"));
 builder.Services.Configure<AiConfig>(builder.Configuration.GetSection("Ai"));
 builder.Services.Configure<NotificationConfig>(builder.Configuration.GetSection("Notifications"));
 builder.Services.Configure<SecurityConfig>(builder.Configuration.GetSection("Security"));
+// Inject the resolved JWT secret into SecurityConfig (handles auto-generated secrets)
+builder.Services.PostConfigure<SecurityConfig>(config =>
+{
+    if (string.IsNullOrEmpty(config.JwtSecret))
+    {
+        config.JwtSecret = resolvedJwtSecret;
+    }
+});
 builder.Services.Configure<LicenseConfig>(builder.Configuration.GetSection("License"));
 
 // Database
@@ -116,16 +180,13 @@ builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 builder.Services.AddMemoryCache();
 
 // Authentication
-var jwtSecret = builder.Configuration.GetValue<string>("Security:JwtSecret")
-    ?? throw new InvalidOperationException("JWT secret not configured. Set Security:JwtSecret in config or XCLUADE_SECURITY__JWTSECRET environment variable.");
-
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(resolvedJwtSecret)),
             ValidateIssuer = true,
             ValidIssuer = "XcluadeAgent",
             ValidateAudience = true,
