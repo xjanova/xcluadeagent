@@ -40,22 +40,10 @@ public class AppDbContext : DbContext
             entity.Property(e => e.LastError).HasMaxLength(5000);
             entity.Property(e => e.WebhookSecret).HasMaxLength(100);
 
-            // Store Config as JSON
+            // Store Config as JSON (includes Permissions and HealthCheck)
             entity.OwnsOne(e => e.Config, config =>
             {
                 config.ToJson();
-            });
-
-            // Store Permissions as JSON
-            entity.OwnsOne(e => e.Permissions, perm =>
-            {
-                perm.ToJson();
-            });
-
-            // Store HealthCheck as JSON
-            entity.OwnsOne(e => e.HealthCheck, hc =>
-            {
-                hc.ToJson();
             });
         });
 
