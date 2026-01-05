@@ -319,14 +319,32 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-// Ensure database is created
+// Ensure database is created with proper schema
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    // Use EnsureCreated for initial setup (creates schema without migrations)
-    // For production with migrations, use: await db.Database.MigrateAsync();
-    await db.Database.EnsureCreatedAsync();
+    // Check if database has proper schema by trying to query
+    bool needsRecreate = false;
+    try
+    {
+        // Try a simple query to check if tables exist
+        _ = await db.Database.ExecuteSqlRawAsync("SELECT 1 FROM Users LIMIT 1");
+    }
+    catch (Microsoft.Data.Sqlite.SqliteException)
+    {
+        // Tables don't exist - need to recreate database
+        needsRecreate = true;
+        Log.Warning("Database schema missing. Recreating database...");
+    }
+
+    if (needsRecreate)
+    {
+        // Delete existing database and recreate with proper schema
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+        Log.Information("Database recreated with fresh schema");
+    }
 
     // Seed default admin user if not exists
     var adminId = Guid.Parse("00000000-0000-0000-0000-000000000001");
