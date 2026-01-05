@@ -135,22 +135,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.UserAgent).HasMaxLength(500);
         });
 
-        // Seed default admin user
-        // SECURITY: Default password must be changed on first login
-        var adminId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        modelBuilder.Entity<User>().HasData(new User
-        {
-            Id = adminId,
-            Username = "admin",
-            Email = "admin@localhost",
-            // Default password: admin123 - MUST be changed on first login
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
-            DisplayName = "Administrator",
-            Role = Core.Enums.UserRole.SuperAdmin,
-            IsActive = true,
-            RequirePasswordChange = true, // Force password change on first login
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        });
+        // Note: Admin user seeding moved to Program.cs (runtime)
+        // HasData is not supported for entities with JSON-mapped properties
     }
 }

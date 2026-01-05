@@ -324,6 +324,27 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+
+    // Seed default admin user if not exists
+    var adminId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    if (!await db.Users.AnyAsync(u => u.Id == adminId))
+    {
+        db.Users.Add(new XcluadeAgent.Core.Models.User
+        {
+            Id = adminId,
+            Username = "admin",
+            Email = "admin@localhost",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+            DisplayName = "Administrator",
+            Role = XcluadeAgent.Core.Enums.UserRole.SuperAdmin,
+            IsActive = true,
+            RequirePasswordChange = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        Log.Information("Default admin user created (username: admin, password: admin123)");
+    }
 }
 
 // Middleware
