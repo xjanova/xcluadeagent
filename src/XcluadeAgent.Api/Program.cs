@@ -18,6 +18,7 @@ using XcluadeAgent.Infrastructure.Security;
 using XcluadeAgent.Infrastructure.Sync;
 using XcluadeAgent.Api.Hubs;
 using XcluadeAgent.Shared.Constants;
+using Microsoft.Extensions.Hosting.Systemd;
 
 // XcluadeAgent - GitHub Sync Service
 // Developed by xman studio | https://xman4289.com
@@ -38,6 +39,9 @@ Console.WriteLine(@"
 ");
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Add systemd integration for Linux service (handles Type=notify)
+builder.Host.UseSystemd();
 
 // Load YAML configuration
 builder.Configuration

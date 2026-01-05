@@ -35,6 +35,9 @@
 
     <!-- Logging -->
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.0" />
+
+    <!-- Systemd integration for Linux service -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.1" />
   </ItemGroup>
 
 </Project>

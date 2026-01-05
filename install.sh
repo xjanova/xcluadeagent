@@ -130,22 +130,39 @@ EOF
 
 chown -R $SERVICE_USER:$SERVICE_USER $INSTALL_DIR/config
 
-# Create systemd service
+# Verify build output exists
+if [ ! -f "$INSTALL_DIR/src/XcluadeAgent.Api/bin/Release/net8.0/XcluadeAgent.Api.dll" ]; then
+    echo -e "${RED}✗${NC} Build output not found. Build may have failed."
+    echo -e "  Try running: ${CYAN}cd $INSTALL_DIR && dotnet build -c Release${NC}"
+    exit 1
+fi
+
+# Create systemd service with proper timeout and fallback settings
 cat > /etc/systemd/system/xcluadeagent.service << EOF
 [Unit]
 Description=XcluadeAgent - GitHub Sync Dashboard
 After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=notify
 User=$SERVICE_USER
 Group=$SERVICE_USER
-WorkingDirectory=$INSTALL_DIR
+WorkingDirectory=$INSTALL_DIR/src/XcluadeAgent.Api/bin/Release/net8.0
 ExecStart=/usr/bin/dotnet $INSTALL_DIR/src/XcluadeAgent.Api/bin/Release/net8.0/XcluadeAgent.Api.dll
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
-Restart=always
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Restart=on-failure
 RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=30
+WatchdogSec=60
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
@@ -153,7 +170,19 @@ EOF
 
 systemctl daemon-reload
 systemctl enable xcluadeagent -q
-systemctl start xcluadeagent
+
+# Start service with error handling
+echo -e "${YELLOW}⏳${NC} Starting service..."
+if systemctl start xcluadeagent; then
+    echo -e "${GREEN}✓${NC} Service started successfully"
+else
+    echo -e "${YELLOW}⚠${NC} Service failed to start. Checking logs..."
+    journalctl -u xcluadeagent -n 20 --no-pager 2>/dev/null || true
+    echo ""
+    echo -e "${YELLOW}ℹ${NC} You can start it manually later with:"
+    echo -e "  ${CYAN}sudo systemctl start xcluadeagent${NC}"
+    echo -e "  ${CYAN}sudo journalctl -u xcluadeagent -f${NC}"
+fi
 
 # Wait for startup
 sleep 3

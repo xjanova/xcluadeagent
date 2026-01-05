@@ -825,12 +825,22 @@ CONFIGEOF
     chmod 600 $INSTALL_DIR/config/config.yaml
     print_success "ตั้งค่า permissions"
 
-    # Create systemd service
+    # Verify build output exists
+    if [ ! -f "$INSTALL_DIR/app/XcluadeAgent.Api.dll" ]; then
+        print_error "Build output not found at $INSTALL_DIR/app/XcluadeAgent.Api.dll"
+        print_info "Build may have failed. Check the build logs above."
+        exit 1
+    fi
+    print_success "Verified build output exists"
+
+    # Create systemd service with proper timeout and fallback settings
     cat > /etc/systemd/system/${SERVICE_NAME}.service << SERVICEEOF
 [Unit]
 Description=XcluadeAgent - GitHub Sync Service
 Documentation=https://xman4289.com
 After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=notify
@@ -838,15 +848,21 @@ User=root
 Group=root
 WorkingDirectory=$INSTALL_DIR/app
 ExecStart=/usr/bin/dotnet $INSTALL_DIR/app/XcluadeAgent.Api.dll
-Restart=always
+Restart=on-failure
 RestartSec=10
-TimeoutStartSec=60
+TimeoutStartSec=120
 TimeoutStopSec=30
+WatchdogSec=60
 
 # Environment
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://localhost:$CONFIG_PORT
 Environment=XCLUADE_CONFIG_PATH=$INSTALL_DIR/config/config.yaml
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
@@ -926,9 +942,16 @@ APACHEEOF
 # COMPLETION
 # =============================================================================
 show_completion() {
-    # Start service
-    systemctl start $SERVICE_NAME 2>/dev/null || true
-    sleep 2
+    # Start service with better error handling
+    echo ""
+    print_info "กำลังเริ่ม service..."
+
+    if systemctl start $SERVICE_NAME 2>/dev/null; then
+        sleep 3
+    else
+        print_warning "Service ไม่สามารถ start ได้อัตโนมัติ"
+        print_info "ตรวจสอบ logs ด้วย: journalctl -u $SERVICE_NAME -n 50"
+    fi
 
     local is_running=false
     service_running $SERVICE_NAME && is_running=true
