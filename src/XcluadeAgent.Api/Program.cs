@@ -323,7 +323,10 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+
+    // Use EnsureCreated for initial setup (creates schema without migrations)
+    // For production with migrations, use: await db.Database.MigrateAsync();
+    await db.Database.EnsureCreatedAsync();
 
     // Seed default admin user if not exists
     var adminId = Guid.Parse("00000000-0000-0000-0000-000000000001");
