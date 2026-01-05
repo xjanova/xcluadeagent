@@ -45,6 +45,18 @@ public class AppDbContext : DbContext
             {
                 config.ToJson();
             });
+
+            // Store Permissions as JSON
+            entity.OwnsOne(e => e.Permissions, perm =>
+            {
+                perm.ToJson();
+            });
+
+            // Store HealthCheck as JSON
+            entity.OwnsOne(e => e.HealthCheck, hc =>
+            {
+                hc.ToJson();
+            });
         });
 
         // SyncHistory configuration
