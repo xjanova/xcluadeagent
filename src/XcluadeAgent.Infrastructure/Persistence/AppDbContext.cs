@@ -21,6 +21,12 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Ignore types that are serialized as JSON within owned types
+        // These are nested in ProjectConfig which is stored as JSON
+        modelBuilder.Ignore<FilePermissions>();
+        modelBuilder.Ignore<HealthCheckConfig>();
+        modelBuilder.Ignore<ProjectBackupConfig>();
+
         // Project configuration
         modelBuilder.Entity<Project>(entity =>
         {
