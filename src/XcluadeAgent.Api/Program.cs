@@ -20,6 +20,7 @@ using XcluadeAgent.Infrastructure.Sync;
 using XcluadeAgent.Api.Hubs;
 using XcluadeAgent.Shared.Constants;
 using Microsoft.Extensions.Hosting.Systemd;
+using Microsoft.AspNetCore.Components;
 
 // XcluadeAgent - GitHub Sync Service
 // Developed by xman studio | https://xman4289.com
@@ -150,6 +151,13 @@ builder.Services.AddHttpClient("GitHub", client =>
 {
     client.DefaultRequestHeaders.Add("User-Agent", "XcluadeAgent/1.0.0");
     client.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+});
+
+// HttpClient for Blazor components (with base address from NavigationManager)
+builder.Services.AddScoped(sp =>
+{
+    var navigationManager = sp.GetRequiredService<NavigationManager>();
+    return new HttpClient { BaseAddress = new Uri(navigationManager.BaseUri) };
 });
 
 // Services
