@@ -314,7 +314,10 @@
                 stats = response.Data;
             }
         }
-        catch { }
+        catch
+        {
+            // Silent failure - UI handles empty state
+        }
     }
 
     private async Task LoadChannelsAsync()
@@ -327,7 +330,10 @@
                 channels = response.Data;
             }
         }
-        catch { }
+        catch
+        {
+            // Silent failure - UI handles empty state
+        }
     }
 
     private async Task SetupSignalRAsync()
