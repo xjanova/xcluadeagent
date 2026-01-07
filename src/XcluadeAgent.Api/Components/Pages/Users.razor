@@ -1,5 +1,9 @@
 @page "/users"
+@using XcluadeAgent.Shared.DTOs
+@using XcluadeAgent.Core.Enums
+@using System.Net.Http.Json
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Users - XcluadeAgent</PageTitle>
 
@@ -15,6 +19,20 @@
             <span>Add User</span>
         </button>
     </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="bg-green-500/20 border border-green-500 text-green-300 p-4 rounded-lg">
+            @successMessage
+        </div>
+    }
 
     <!-- License Info -->
     <div class="card p-4 flex items-center justify-between">
@@ -33,92 +51,102 @@
         </div>
     </div>
 
-    <!-- Users Table -->
-    <div class="card overflow-hidden">
-        <table class="w-full">
-            <thead class="bg-gray-800">
-                <tr>
-                    <th class="text-left p-4 font-medium">User</th>
-                    <th class="text-left p-4 font-medium">Role</th>
-                    <th class="text-left p-4 font-medium">Status</th>
-                    <th class="text-left p-4 font-medium">2FA</th>
-                    <th class="text-left p-4 font-medium">Last Login</th>
-                    <th class="text-right p-4 font-medium">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-700">
-                @foreach (var user in users)
-                {
-                    <tr class="hover:bg-gray-800/50">
-                        <td class="p-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold">
-                                    @user.Username[0].ToString().ToUpper()
-                                </div>
-                                <div>
-                                    <p class="font-medium">@user.DisplayName</p>
-                                    <p class="text-sm text-gray-400">@user.Email</p>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="p-4">
-                            <span class="px-2 py-1 rounded text-sm @GetRoleBadgeClass(user.Role)">
-                                @user.Role
-                            </span>
-                        </td>
-                        <td class="p-4">
-                            @if (user.IsActive)
-                            {
-                                <span class="flex items-center space-x-1 text-green-500">
-                                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                                    <span>Active</span>
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="flex items-center space-x-1 text-gray-500">
-                                    <span class="w-2 h-2 rounded-full bg-gray-500"></span>
-                                    <span>Inactive</span>
-                                </span>
-                            }
-                        </td>
-                        <td class="p-4">
-                            @if (user.TwoFactorEnabled)
-                            {
-                                <span class="text-green-500">Enabled</span>
-                            }
-                            else
-                            {
-                                <span class="text-gray-500">Disabled</span>
-                            }
-                        </td>
-                        <td class="p-4 text-gray-400">
-                            @(user.LastLoginAt?.ToString("g") ?? "Never")
-                        </td>
-                        <td class="p-4 text-right">
-                            <div class="flex items-center justify-end space-x-2">
-                                <button class="btn-ghost text-sm px-2 py-1"
-                                        @onclick="() => EditUser(user)">Edit</button>
-                                @if (user.Username != "admin")
-                                {
-                                    <button class="btn-ghost text-sm px-2 py-1 text-red-400 hover:text-red-300"
-                                            @onclick="() => DeleteUser(user.Id)">Delete</button>
-                                }
-                            </div>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-
-    @if (!users.Any())
+    @if (isLoading)
     {
         <div class="card p-12 text-center">
-            <div class="text-6xl mb-4">U</div>
-            <h3 class="text-xl font-semibold mb-2">No users found</h3>
-            <p class="text-gray-400">Add your first user to get started</p>
+            <div class="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p class="text-gray-400">Loading users...</p>
         </div>
+    }
+    else
+    {
+        <!-- Users Table -->
+        <div class="card overflow-hidden">
+            <table class="w-full">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="text-left p-4 font-medium">User</th>
+                        <th class="text-left p-4 font-medium">Role</th>
+                        <th class="text-left p-4 font-medium">Status</th>
+                        <th class="text-left p-4 font-medium">2FA</th>
+                        <th class="text-left p-4 font-medium">Last Login</th>
+                        <th class="text-right p-4 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    @foreach (var user in users)
+                    {
+                        <tr class="hover:bg-gray-800/50">
+                            <td class="p-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold">
+                                        @user.Username[0].ToString().ToUpper()
+                                    </div>
+                                    <div>
+                                        <p class="font-medium">@user.DisplayName</p>
+                                        <p class="text-sm text-gray-400">@user.Email</p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-4">
+                                <span class="px-2 py-1 rounded text-sm @GetRoleBadgeClass(user.Role)">
+                                    @user.Role
+                                </span>
+                            </td>
+                            <td class="p-4">
+                                @if (user.IsActive)
+                                {
+                                    <span class="flex items-center space-x-1 text-green-500">
+                                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                        <span>Active</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="flex items-center space-x-1 text-gray-500">
+                                        <span class="w-2 h-2 rounded-full bg-gray-500"></span>
+                                        <span>Inactive</span>
+                                    </span>
+                                }
+                            </td>
+                            <td class="p-4">
+                                @if (user.TwoFactorEnabled)
+                                {
+                                    <span class="text-green-500">Enabled</span>
+                                }
+                                else
+                                {
+                                    <span class="text-gray-500">Disabled</span>
+                                }
+                            </td>
+                            <td class="p-4 text-gray-400">
+                                @(user.LastLoginAt?.ToString("g") ?? "Never")
+                            </td>
+                            <td class="p-4 text-right">
+                                <div class="flex items-center justify-end space-x-2">
+                                    <button class="btn-ghost text-sm px-2 py-1"
+                                            @onclick="() => EditUser(user)">Edit</button>
+                                    @if (user.Username != "admin")
+                                    {
+                                        <button class="btn-ghost text-sm px-2 py-1 text-red-400 hover:text-red-300"
+                                                @onclick="() => ConfirmDeleteUser(user)">Delete</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (!users.Any())
+        {
+            <div class="card p-12 text-center">
+                <div class="text-6xl mb-4">U</div>
+                <h3 class="text-xl font-semibold mb-2">No users found</h3>
+                <p class="text-gray-400">Add your first user to get started</p>
+            </div>
+        }
     }
 </div>
 
@@ -172,7 +200,7 @@
             <div class="p-4 border-t border-gray-700 flex justify-between">
                 @if (editingUser != null)
                 {
-                    <button class="btn-secondary" @onclick="ResetPassword">Reset Password</button>
+                    <button class="btn-secondary" @onclick="ResetPassword" disabled="@isSaving">Reset Password</button>
                 }
                 else
                 {
@@ -180,10 +208,61 @@
                 }
                 <div class="flex space-x-3">
                     <button class="btn-secondary" @onclick="CloseModal">Cancel</button>
-                    <button class="btn-primary" @onclick="SaveUser">
-                        @(editingUser == null ? "Create User" : "Save Changes")
+                    <button class="btn-primary" @onclick="SaveUser" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>@(editingUser == null ? "Create User" : "Save Changes")</span>
+                        }
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteModal)
+{
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @onclick="() => showDeleteModal = false">
+        <div class="card w-full max-w-md" @onclick:stopPropagation>
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-lg font-semibold text-red-400">Delete User</h2>
+            </div>
+            <div class="p-6">
+                <p>Are you sure you want to delete <strong>@userToDelete?.Username</strong>?</p>
+                <p class="text-sm text-gray-400 mt-2">This action cannot be undone.</p>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end space-x-3">
+                <button class="btn-secondary" @onclick="() => showDeleteModal = false">Cancel</button>
+                <button class="btn-primary bg-red-600 hover:bg-red-700" @onclick="DeleteUser" disabled="@isSaving">
+                    @(isSaving ? "Deleting..." : "Delete")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Reset Password Modal -->
+@if (showResetPasswordModal)
+{
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @onclick="() => showResetPasswordModal = false">
+        <div class="card w-full max-w-md" @onclick:stopPropagation>
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-lg font-semibold text-green-400">Password Reset</h2>
+            </div>
+            <div class="p-6">
+                <p class="mb-4">Temporary password for <strong>@editingUser?.Username</strong>:</p>
+                <div class="bg-gray-800 p-4 rounded-lg font-mono text-lg text-center select-all">
+                    @temporaryPassword
+                </div>
+                <p class="text-sm text-gray-400 mt-4">User must change password on next login.</p>
+            </div>
+            <div class="p-4 border-t border-gray-700 flex justify-end">
+                <button class="btn-primary" @onclick="() => showResetPasswordModal = false">Close</button>
             </div>
         </div>
     </div>
@@ -193,7 +272,15 @@
     private List<UserDto> users = new();
     private int userLimit = 1;
     private bool showModal = false;
+    private bool showDeleteModal = false;
+    private bool showResetPasswordModal = false;
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? temporaryPassword;
     private UserDto? editingUser;
+    private UserDto? userToDelete;
     private UserFormData formData = new();
 
     protected override async Task OnInitializedAsync()
@@ -203,33 +290,55 @@
 
     private async Task LoadUsers()
     {
-        // TODO: Load from API
-        users = new List<UserDto>
+        isLoading = true;
+        errorMessage = null;
+
+        try
         {
-            new()
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
             {
-                Id = Guid.NewGuid(),
-                Username = "admin",
-                DisplayName = "Administrator",
-                Email = "admin@xman4289.com",
-                Role = "Admin",
-                IsActive = true,
-                TwoFactorEnabled = true,
-                LastLoginAt = DateTime.Now.AddHours(-1)
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             }
-        };
+
+            var response = await Http.GetFromJsonAsync<ApiResponse<UsersListResponse>>("/api/v1/users");
+            if (response?.Success == true && response.Data != null)
+            {
+                users = response.Data.Users;
+                userLimit = response.Data.UserLimit;
+            }
+            else
+            {
+                errorMessage = response?.Errors?.FirstOrDefault() ?? "Failed to load users";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Failed to connect to server: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading users: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private void ShowAddUser()
     {
         if (users.Count >= userLimit)
         {
-            // TODO: Show upgrade prompt
+            errorMessage = $"User limit reached ({userLimit}). Please upgrade your license.";
             return;
         }
         editingUser = null;
         formData = new UserFormData { IsActive = true, Role = "Viewer" };
         showModal = true;
+        errorMessage = null;
+        successMessage = null;
     }
 
     private void EditUser(UserDto user)
@@ -244,6 +353,8 @@
             IsActive = user.IsActive
         };
         showModal = true;
+        errorMessage = null;
+        successMessage = null;
     }
 
     private void CloseModal()
@@ -254,41 +365,188 @@
 
     private async Task SaveUser()
     {
-        // TODO: Save to API
-        CloseModal();
-        await LoadUsers();
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            if (editingUser == null)
+            {
+                // Validate passwords match
+                if (formData.Password != formData.ConfirmPassword)
+                {
+                    errorMessage = "Passwords do not match";
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(formData.Password) || formData.Password.Length < 8)
+                {
+                    errorMessage = "Password must be at least 8 characters";
+                    return;
+                }
+
+                // Create new user
+                var createRequest = new CreateUserRequest
+                {
+                    Username = formData.Username,
+                    Email = formData.Email,
+                    DisplayName = formData.DisplayName,
+                    Password = formData.Password!,
+                    Role = Enum.TryParse<UserRole>(formData.Role, out var role) ? role : UserRole.Viewer
+                };
+
+                var response = await Http.PostAsJsonAsync("/api/v1/users", createRequest);
+                var result = await response.Content.ReadFromJsonAsync<ApiResponse<UserDto>>();
+
+                if (result?.Success == true)
+                {
+                    successMessage = "User created successfully";
+                    CloseModal();
+                    await LoadUsers();
+                }
+                else
+                {
+                    errorMessage = result?.Errors?.FirstOrDefault() ?? "Failed to create user";
+                }
+            }
+            else
+            {
+                // Update existing user
+                var updateRequest = new UpdateUserRequest
+                {
+                    Email = formData.Email,
+                    DisplayName = formData.DisplayName,
+                    Role = Enum.TryParse<UserRole>(formData.Role, out var role) ? role : null,
+                    IsActive = formData.IsActive
+                };
+
+                var response = await Http.PutAsJsonAsync($"/api/v1/users/{editingUser.Id}", updateRequest);
+                var result = await response.Content.ReadFromJsonAsync<ApiResponse<UserDto>>();
+
+                if (result?.Success == true)
+                {
+                    successMessage = "User updated successfully";
+                    CloseModal();
+                    await LoadUsers();
+                }
+                else
+                {
+                    errorMessage = result?.Errors?.FirstOrDefault() ?? "Failed to update user";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving user: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    private async Task DeleteUser(Guid id)
+    private void ConfirmDeleteUser(UserDto user)
     {
-        // TODO: Confirm and delete
-        await LoadUsers();
+        userToDelete = user;
+        showDeleteModal = true;
+        errorMessage = null;
+        successMessage = null;
+    }
+
+    private async Task DeleteUser()
+    {
+        if (userToDelete == null) return;
+
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await Http.DeleteAsync($"/api/v1/users/{userToDelete.Id}");
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse>();
+
+            if (result?.Success == true)
+            {
+                successMessage = "User deleted successfully";
+                showDeleteModal = false;
+                userToDelete = null;
+                await LoadUsers();
+            }
+            else
+            {
+                errorMessage = result?.Errors?.FirstOrDefault() ?? "Failed to delete user";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error deleting user: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     private async Task ResetPassword()
     {
-        // TODO: Send password reset email
+        if (editingUser == null) return;
+
+        isSaving = true;
+        errorMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await Http.PostAsync($"/api/v1/users/{editingUser.Id}/reset-password", null);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<ResetPasswordResponse>>();
+
+            if (result?.Success == true && result.Data != null)
+            {
+                temporaryPassword = result.Data.TemporaryPassword;
+                showResetPasswordModal = true;
+            }
+            else
+            {
+                errorMessage = result?.Errors?.FirstOrDefault() ?? "Failed to reset password";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error resetting password: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
     private string GetRoleBadgeClass(string role) => role switch
     {
-        "Admin" => "bg-red-500/20 text-red-400",
+        "Admin" or "SuperAdmin" => "bg-red-500/20 text-red-400",
         "Operator" => "bg-blue-500/20 text-blue-400",
         "Viewer" => "bg-gray-500/20 text-gray-400",
         _ => "bg-gray-500/20 text-gray-400"
     };
-
-    private class UserDto
-    {
-        public Guid Id { get; set; }
-        public string Username { get; set; } = "";
-        public string? DisplayName { get; set; }
-        public string Email { get; set; } = "";
-        public string Role { get; set; } = "";
-        public bool IsActive { get; set; }
-        public bool TwoFactorEnabled { get; set; }
-        public DateTime? LastLoginAt { get; set; }
-    }
 
     private class UserFormData
     {
@@ -299,5 +557,18 @@
         public string? ConfirmPassword { get; set; }
         public string Role { get; set; } = "Viewer";
         public bool IsActive { get; set; } = true;
+    }
+
+    private class UsersListResponse
+    {
+        public List<UserDto> Users { get; set; } = new();
+        public int TotalCount { get; set; }
+        public int UserLimit { get; set; }
+    }
+
+    private class ResetPasswordResponse
+    {
+        public string TemporaryPassword { get; set; } = "";
+        public string Message { get; set; } = "";
     }
 }
