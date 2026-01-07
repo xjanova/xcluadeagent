@@ -255,6 +255,270 @@ versionCommand.SetAction((parseResult, cancellationToken) =>
 });
 rootCommand.Subcommands.Add(versionCommand);
 
+// Update command group
+var updateCommand = new Command("update", "Self-update management");
+
+// Update check subcommand
+var updateCheckCommand = new Command("check", "Check for available updates");
+updateCheckCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
+    using var client = CreateClient(apiUrl, token);
+
+    await AnsiConsole.Status()
+        .StartAsync("Checking for updates...", async ctx =>
+        {
+            try
+            {
+                var response = await client.GetFromJsonAsync<ApiResponse<UpdateCheckDto>>("api/v1/update/check", cancellationToken);
+
+                if (response?.Data == null)
+                {
+                    AnsiConsole.MarkupLine("[red]Failed to check for updates[/]");
+                    return;
+                }
+
+                var data = response.Data;
+
+                var table = new Table();
+                table.AddColumn("Property");
+                table.AddColumn("Value");
+
+                table.AddRow("Current Version", data.CurrentVersion ?? "Unknown");
+                table.AddRow("Latest Version", data.LatestVersion ?? "Unknown");
+
+                if (data.UpdateAvailable)
+                {
+                    table.AddRow("Status", "[green]Update Available![/]");
+                    if (data.DownloadSizeMb.HasValue)
+                    {
+                        table.AddRow("Download Size", $"{data.DownloadSizeMb.Value} MB");
+                    }
+                    if (data.PublishedAt.HasValue)
+                    {
+                        table.AddRow("Published", data.PublishedAt.Value.ToString("yyyy-MM-dd HH:mm"));
+                    }
+                }
+                else
+                {
+                    table.AddRow("Status", "[grey]Up to date[/]");
+                }
+
+                AnsiConsole.Write(table);
+
+                if (data.UpdateAvailable && !string.IsNullOrEmpty(data.ReleaseNotes))
+                {
+                    AnsiConsole.WriteLine();
+                    AnsiConsole.MarkupLine("[blue]Release Notes:[/]");
+                    var panel = new Panel(data.ReleaseNotes)
+                    {
+                        Border = BoxBorder.Rounded,
+                        Padding = new Padding(1)
+                    };
+                    AnsiConsole.Write(panel);
+
+                    AnsiConsole.WriteLine();
+                    AnsiConsole.MarkupLine("Run [yellow]syncctl update apply[/] to install the update.");
+                }
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+            }
+        });
+});
+updateCommand.Subcommands.Add(updateCheckCommand);
+
+// Update apply subcommand
+var updateApplyCommand = new Command("apply", "Apply available update");
+var forceOption = new Option<bool>("--force", "-f") { Description = "Skip confirmation prompt" };
+updateApplyCommand.Options.Add(forceOption);
+
+updateApplyCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
+    var force = parseResult.GetValue(forceOption);
+    using var client = CreateClient(apiUrl, token);
+
+    // First check for updates
+    AnsiConsole.MarkupLine("[blue]Checking for updates...[/]");
+
+    try
+    {
+        var checkResponse = await client.GetFromJsonAsync<ApiResponse<UpdateCheckDto>>("api/v1/update/check", cancellationToken);
+
+        if (checkResponse?.Data == null || !checkResponse.Data.UpdateAvailable)
+        {
+            AnsiConsole.MarkupLine("[green]System is already up to date.[/]");
+            return;
+        }
+
+        var updateInfo = checkResponse.Data;
+
+        AnsiConsole.MarkupLine($"[green]Update available: v{updateInfo.LatestVersion}[/]");
+
+        if (!force && !AnsiConsole.Confirm($"Install update to version [yellow]{updateInfo.LatestVersion}[/]?"))
+        {
+            AnsiConsole.MarkupLine("[grey]Update cancelled.[/]");
+            return;
+        }
+
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(new ProgressColumn[]
+            {
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn(),
+                new SpinnerColumn()
+            })
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("[yellow]Applying update...[/]", maxValue: 100);
+
+                task.Description = "[blue]Creating backup...[/]";
+                task.Value = 10;
+                await Task.Delay(500, cancellationToken);
+
+                task.Description = "[blue]Downloading update...[/]";
+                task.Value = 30;
+
+                var applyResponse = await client.PostAsJsonAsync("api/v1/update/apply",
+                    new { Version = updateInfo.LatestVersion }, cancellationToken);
+                var result = await applyResponse.Content.ReadFromJsonAsync<ApiResponse<UpdateResultDto>>(cancellationToken);
+
+                if (result?.Data?.Success == true)
+                {
+                    task.Description = "[blue]Extracting files...[/]";
+                    task.Value = 70;
+                    await Task.Delay(500, cancellationToken);
+
+                    task.Description = "[green]Update complete![/]";
+                    task.Value = 100;
+
+                    AnsiConsole.WriteLine();
+                    AnsiConsole.MarkupLine("[green]Update installed successfully![/]");
+                    AnsiConsole.MarkupLine($"Installed version: [yellow]{result.Data.InstalledVersion}[/]");
+
+                    if (!string.IsNullOrEmpty(result.Data.BackupPath))
+                    {
+                        AnsiConsole.MarkupLine($"Backup saved at: [grey]{result.Data.BackupPath}[/]");
+                    }
+
+                    if (result.Data.RestartRequired)
+                    {
+                        AnsiConsole.WriteLine();
+                        AnsiConsole.MarkupLine("[yellow]Application restart required to complete the update.[/]");
+
+                        if (AnsiConsole.Confirm("Restart now?"))
+                        {
+                            await client.PostAsync("api/v1/update/restart", null, cancellationToken);
+                            AnsiConsole.MarkupLine("[blue]Restart initiated...[/]");
+                        }
+                    }
+                }
+                else
+                {
+                    task.Description = "[red]Update failed[/]";
+                    task.Value = 100;
+                    AnsiConsole.WriteLine();
+                    AnsiConsole.MarkupLine($"[red]Update failed: {result?.Data?.ErrorMessage ?? "Unknown error"}[/]");
+                }
+            });
+    }
+    catch (Exception ex)
+    {
+        AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+    }
+});
+updateCommand.Subcommands.Add(updateApplyCommand);
+
+// Update history subcommand
+var updateHistoryCommand = new Command("history", "Show update history");
+updateHistoryCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
+    using var client = CreateClient(apiUrl, token);
+
+    await AnsiConsole.Status()
+        .StartAsync("Fetching update history...", async ctx =>
+        {
+            try
+            {
+                var response = await client.GetFromJsonAsync<ApiResponse<List<UpdateHistoryDto>>>("api/v1/update/history", cancellationToken);
+
+                if (response?.Data == null || response.Data.Count == 0)
+                {
+                    AnsiConsole.MarkupLine("[yellow]No update history found.[/]");
+                    return;
+                }
+
+                var table = new Table();
+                table.AddColumn("Date");
+                table.AddColumn("From");
+                table.AddColumn("To");
+                table.AddColumn("Status");
+                table.AddColumn("Error");
+
+                foreach (var entry in response.Data.Take(20))
+                {
+                    var statusColor = entry.Success ? "green" : "red";
+                    var statusText = entry.Success ? "Success" : "Failed";
+
+                    table.AddRow(
+                        entry.UpdatedAt.ToString("yyyy-MM-dd HH:mm"),
+                        entry.FromVersion,
+                        entry.ToVersion,
+                        $"[{statusColor}]{statusText}[/]",
+                        entry.ErrorMessage ?? "-"
+                    );
+                }
+
+                AnsiConsole.Write(table);
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+            }
+        });
+});
+updateCommand.Subcommands.Add(updateHistoryCommand);
+
+// Update version subcommand
+var updateVersionCommand = new Command("version", "Show current version");
+updateVersionCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var apiUrl = parseResult.GetValue(apiUrlOption)!;
+    var token = parseResult.GetValue(tokenOption);
+    using var client = CreateClient(apiUrl, token);
+
+    try
+    {
+        var response = await client.GetFromJsonAsync<ApiResponse<VersionInfoDto>>("api/v1/update/version", cancellationToken);
+
+        if (response?.Data != null)
+        {
+            AnsiConsole.Write(new FigletText("XcluadeAgent").Color(Color.Blue));
+            AnsiConsole.MarkupLine($"Version: [yellow]{response.Data.Version}[/]");
+            AnsiConsole.MarkupLine($"Build Date: [grey]{response.Data.BuildDate}[/]");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("[red]Failed to get version info[/]");
+        }
+    }
+    catch (Exception ex)
+    {
+        AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+    }
+});
+updateCommand.Subcommands.Add(updateVersionCommand);
+
+rootCommand.Subcommands.Add(updateCommand);
+
 return await rootCommand.Parse(args).InvokeAsync();
 
 // Helper

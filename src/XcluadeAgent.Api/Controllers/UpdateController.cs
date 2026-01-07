@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using XcluadeAgent.Core.Interfaces;
 using XcluadeAgent.Shared.DTOs;
 
+// DTOs are defined in XcluadeAgent.Shared.DTOs.UpdateDto
+
 namespace XcluadeAgent.Api.Controllers;
 
 [ApiController]
@@ -175,56 +177,3 @@ public class UpdateController : ControllerBase
         return "Unknown";
     }
 }
-
-#region DTOs
-
-public class VersionInfoDto
-{
-    public string Version { get; set; } = string.Empty;
-    public string BuildDate { get; set; } = string.Empty;
-}
-
-public class UpdateCheckDto
-{
-    public bool UpdateAvailable { get; set; }
-    public string CurrentVersion { get; set; } = string.Empty;
-    public string? LatestVersion { get; set; }
-    public string? ReleaseNotes { get; set; }
-    public string? DownloadUrl { get; set; }
-    public DateTime? PublishedAt { get; set; }
-    public double? DownloadSizeMb { get; set; }
-    public string? ErrorMessage { get; set; }
-    public List<ReleaseAssetDto> Assets { get; set; } = new();
-}
-
-public class ReleaseAssetDto
-{
-    public string Name { get; set; } = string.Empty;
-    public string DownloadUrl { get; set; } = string.Empty;
-    public double SizeMb { get; set; }
-}
-
-public class ApplyUpdateRequest
-{
-    public string Version { get; set; } = string.Empty;
-}
-
-public class UpdateResultDto
-{
-    public bool Success { get; set; }
-    public string? ErrorMessage { get; set; }
-    public string? InstalledVersion { get; set; }
-    public bool RestartRequired { get; set; }
-    public string? BackupPath { get; set; }
-}
-
-public class UpdateHistoryDto
-{
-    public string FromVersion { get; set; } = string.Empty;
-    public string ToVersion { get; set; } = string.Empty;
-    public DateTime UpdatedAt { get; set; }
-    public bool Success { get; set; }
-    public string? ErrorMessage { get; set; }
-}
-
-#endregion
