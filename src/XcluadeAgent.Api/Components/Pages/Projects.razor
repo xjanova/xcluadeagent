@@ -18,6 +18,20 @@
         </button>
     </div>
 
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="bg-green-500/20 border border-green-500 text-green-300 p-4 rounded-lg">
+            @successMessage
+        </div>
+    }
+
     <!-- Filters -->
     <div class="card p-4">
         <div class="flex flex-wrap gap-4">
@@ -230,6 +244,8 @@
     private bool showModal = false;
     private ProjectListItemDto? editingProject;
     private ProjectFormData formData = new();
+    private string? errorMessage;
+    private string? successMessage;
 
     private IEnumerable<ProjectListItemDto> FilteredProjects => projects
         .Where(p => string.IsNullOrEmpty(searchQuery) ||
@@ -270,7 +286,7 @@
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading projects: {ex.Message}");
+            errorMessage = $"Error loading projects: {ex.Message}";
             projects = new();
         }
     }
@@ -327,8 +343,10 @@
                 var response = await Http.PostAsJsonAsync("api/v1/projects", createRequest);
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"Error creating project: {response.StatusCode}");
+                    errorMessage = $"Error creating project: {response.StatusCode}";
+                    return;
                 }
+                successMessage = "Project created successfully";
             }
             else
             {
@@ -347,13 +365,16 @@
                 var response = await Http.PutAsJsonAsync($"api/v1/projects/{editingProject.Id}", updateRequest);
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"Error updating project: {response.StatusCode}");
+                    errorMessage = $"Error updating project: {response.StatusCode}";
+                    return;
                 }
+                successMessage = "Project updated successfully";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error saving project: {ex.Message}");
+            errorMessage = $"Error saving project: {ex.Message}";
+            return;
         }
 
         CloseModal();
@@ -362,41 +383,45 @@
 
     private async Task SyncProject(Guid id)
     {
+        errorMessage = null;
         try
         {
             var response = await Http.PostAsync($"api/v1/projects/{id}/sync", null);
             if (response.IsSuccessStatusCode)
             {
+                successMessage = "Sync started successfully";
                 await LoadProjects();
             }
             else
             {
-                Console.WriteLine($"Error syncing project: {response.StatusCode}");
+                errorMessage = $"Error syncing project: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error syncing project: {ex.Message}");
+            errorMessage = $"Error syncing project: {ex.Message}";
         }
     }
 
     private async Task DeleteProject(Guid id)
     {
+        errorMessage = null;
         try
         {
             var response = await Http.DeleteAsync($"api/v1/projects/{id}");
             if (response.IsSuccessStatusCode)
             {
+                successMessage = "Project deleted successfully";
                 await LoadProjects();
             }
             else
             {
-                Console.WriteLine($"Error deleting project: {response.StatusCode}");
+                errorMessage = $"Error deleting project: {response.StatusCode}";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deleting project: {ex.Message}");
+            errorMessage = $"Error deleting project: {ex.Message}";
         }
     }
 

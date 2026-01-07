@@ -305,7 +305,10 @@
                 stats = response.Data;
             }
         }
-        catch { }
+        catch
+        {
+            // Silent failure - stats are optional
+        }
     }
 
     private async Task LoadActionTypesAsync()
@@ -318,7 +321,10 @@
                 actionTypes = response.Data;
             }
         }
-        catch { }
+        catch
+        {
+            // Silent failure - filter options will just be empty
+        }
     }
 
     private async Task ApplyFilters()

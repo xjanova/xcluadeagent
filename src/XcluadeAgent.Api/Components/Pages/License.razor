@@ -1,5 +1,7 @@
 @page "/license"
+@using System.Net.Http.Json
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>License - XcluadeAgent</PageTitle>
 
@@ -9,6 +11,20 @@
         <h1 class="text-2xl font-bold">License</h1>
         <p class="text-gray-400">Manage your XcluadeAgent license</p>
     </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="bg-green-500/20 border border-green-500 text-green-300 p-4 rounded-lg">
+            @successMessage
+        </div>
+    }
 
     <!-- Current License -->
     <div class="card p-6">
@@ -173,6 +189,10 @@
 @code {
     private LicenseInfo license = new();
     private string newLicenseKey = "";
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isLoading = true;
+    private bool isActivating = false;
 
     private List<Feature> features = new();
     private List<Plan> plans = new();
@@ -184,18 +204,73 @@
 
     private async Task LoadLicense()
     {
-        // TODO: Load from API
-        license = new LicenseInfo
-        {
-            HasLicense = false,
-            Type = "Community",
-            TypeName = "Community (Free)",
-            ProjectsLimit = 3,
-            ProjectsUsed = 2,
-            UsersLimit = 1,
-            UsersUsed = 1
-        };
+        isLoading = true;
+        errorMessage = null;
 
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await Http.GetFromJsonAsync<ApiResponse<LicenseInfoDto>>("/api/v1/license");
+            if (response?.Success == true && response.Data != null)
+            {
+                var data = response.Data;
+                license = new LicenseInfo
+                {
+                    HasLicense = data.HasLicense,
+                    Type = data.Type,
+                    TypeName = data.TypeName,
+                    LicensedTo = data.LicensedTo,
+                    LicenseKey = data.LicenseKey,
+                    ExpiresAt = data.ExpiresAt,
+                    ProjectsUsed = data.ProjectsUsed,
+                    ProjectsLimit = data.ProjectsLimit,
+                    UsersUsed = data.UsersUsed,
+                    UsersLimit = data.UsersLimit
+                };
+            }
+            else
+            {
+                // Default to community license
+                license = new LicenseInfo
+                {
+                    HasLicense = false,
+                    Type = "Community",
+                    TypeName = "Community (Free)",
+                    ProjectsLimit = 3,
+                    ProjectsUsed = 0,
+                    UsersLimit = 1,
+                    UsersUsed = 1
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load license: {ex.Message}";
+            license = new LicenseInfo
+            {
+                HasLicense = false,
+                Type = "Community",
+                TypeName = "Community (Free)",
+                ProjectsLimit = 3,
+                UsersLimit = 1
+            };
+        }
+        finally
+        {
+            isLoading = false;
+            UpdateFeatures();
+            LoadPlans();
+        }
+    }
+
+    private void UpdateFeatures()
+    {
         features = new List<Feature>
         {
             new("Sync from Releases", "Download and sync from GitHub Releases", true),
@@ -211,7 +286,10 @@
             new("API Access", "RESTful API for automation", license.Type != "Community"),
             new("Priority Support", "24/7 priority support", license.Type == "Enterprise" || license.Type == "Unlimited")
         };
+    }
 
+    private void LoadPlans()
+    {
         plans = new List<Plan>
         {
             new()
@@ -241,26 +319,89 @@
 
     private void ShowUpgrade()
     {
-        // TODO: Implement upgrade modal
+        // Scroll to pricing plans
+        successMessage = "Select a plan below to upgrade";
     }
 
     private async Task ActivateLicense()
     {
         if (string.IsNullOrWhiteSpace(newLicenseKey))
+        {
+            errorMessage = "Please enter a license key";
             return;
+        }
 
-        // TODO: Call API to activate
-        await LoadLicense();
+        isActivating = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await Http.PostAsJsonAsync("/api/v1/license/activate", new { LicenseKey = newLicenseKey });
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<LicenseInfoDto>>();
+
+            if (result?.Success == true)
+            {
+                successMessage = "License activated successfully!";
+                newLicenseKey = "";
+                await LoadLicense();
+            }
+            else
+            {
+                errorMessage = result?.Errors?.FirstOrDefault() ?? "Failed to activate license";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error activating license: {ex.Message}";
+        }
+        finally
+        {
+            isActivating = false;
+        }
     }
 
-    private void CopyLicenseKey()
+    private async Task CopyLicenseKey()
     {
-        // TODO: Copy to clipboard
+        if (!string.IsNullOrEmpty(license.LicenseKey))
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", license.LicenseKey);
+            successMessage = "License key copied to clipboard";
+        }
     }
 
     private void SelectPlan(string planName)
     {
-        // TODO: Redirect to purchase page
+        // Open purchase URL (replace with actual URL)
+        successMessage = $"Contact sales@xman4289.com to purchase {planName} license";
+    }
+
+    private class ApiResponse<T>
+    {
+        public bool Success { get; set; }
+        public T? Data { get; set; }
+        public List<string>? Errors { get; set; }
+    }
+
+    private class LicenseInfoDto
+    {
+        public bool HasLicense { get; set; }
+        public string Type { get; set; } = "Community";
+        public string TypeName { get; set; } = "Community (Free)";
+        public string? LicensedTo { get; set; }
+        public string? LicenseKey { get; set; }
+        public DateTime? ExpiresAt { get; set; }
+        public int ProjectsUsed { get; set; }
+        public int ProjectsLimit { get; set; }
+        public int UsersUsed { get; set; }
+        public int UsersLimit { get; set; }
     }
 
     private string MaskLicenseKey(string? key)
