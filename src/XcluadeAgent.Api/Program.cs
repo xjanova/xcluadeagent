@@ -17,6 +17,7 @@ using XcluadeAgent.Infrastructure.Persistence;
 using XcluadeAgent.Infrastructure.Scanner;
 using XcluadeAgent.Infrastructure.Security;
 using XcluadeAgent.Infrastructure.Sync;
+using XcluadeAgent.Infrastructure.Updates;
 using XcluadeAgent.Api.Hubs;
 using XcluadeAgent.Shared.Constants;
 using Microsoft.Extensions.Hosting.Systemd;
@@ -169,6 +170,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ILicenseService, LicenseService>();
 builder.Services.AddScoped<ISyncService, SyncService>();
 builder.Services.AddSingleton<ITwoFactorService, TwoFactorService>();
+builder.Services.AddScoped<ISelfUpdateService, SelfUpdateService>();
 
 // Scanner services
 builder.Services.AddScoped<ISystemScanner, SystemScanner>();
