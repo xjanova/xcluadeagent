@@ -3,139 +3,158 @@
 @inject IJSRuntime JS
 @using System.Text.Json
 
-<div class="flex min-h-screen">
-    <!-- Sidebar -->
-    <aside class="sidebar flex flex-col">
-        <!-- Logo -->
-        <div class="p-4 border-b border-gray-700">
-            <div class="flex items-center space-x-2">
-                <span class="text-2xl">🔄</span>
-                <div>
-                    <h1 class="text-lg font-bold text-white">XcluadeAgent</h1>
-                    <p class="text-xs text-gray-500">by xman studio</p>
-                </div>
+@if (!isAuthenticated)
+{
+    <!-- Loading state while checking auth -->
+    <div class="flex items-center justify-center min-h-screen bg-gray-900">
+        <div class="text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 mb-4">
+                <span class="text-4xl animate-pulse">🔄</span>
             </div>
+            <p class="text-gray-400">Loading...</p>
         </div>
-
-        <!-- Navigation -->
-        <nav class="flex-1 py-4">
-            <a href="/" class="sidebar-link">
-                <span class="mr-3">📊</span>
-                Dashboard
-            </a>
-            <a href="/projects" class="sidebar-link">
-                <span class="mr-3">📁</span>
-                Projects
-            </a>
-            <a href="/history" class="sidebar-link">
-                <span class="mr-3">📜</span>
-                Sync History
-            </a>
-            <a href="/ai-assistant" class="sidebar-link">
-                <span class="mr-3">🤖</span>
-                AI Assistant
-            </a>
-            <a href="/notifications" class="sidebar-link">
-                <span class="mr-3">🔔</span>
-                Notifications
-            </a>
-            <a href="/audit" class="sidebar-link">
-                <span class="mr-3">📋</span>
-                Audit Log
-            </a>
-
-            <div class="mt-4 px-4">
-                <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Settings</p>
-            </div>
-            <a href="/settings" class="sidebar-link">
-                <span class="mr-3">⚙️</span>
-                Settings
-            </a>
-            <a href="/users" class="sidebar-link">
-                <span class="mr-3">👥</span>
-                Users
-            </a>
-            <a href="/license" class="sidebar-link">
-                <span class="mr-3">📄</span>
-                License
-            </a>
-            <a href="/update" class="sidebar-link">
-                <span class="mr-3">⬆️</span>
-                System Update
-            </a>
-        </nav>
-
-        <!-- Footer -->
-        <div class="p-4 border-t border-gray-700">
-            <div class="flex items-center justify-between text-sm text-gray-500">
-                <span>v1.0.0</span>
-                <a href="https://xman4289.com" target="_blank" class="hover:text-white">
-                    xman4289.com
-                </a>
-            </div>
-        </div>
-    </aside>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col">
-        <!-- Header -->
-        <header class="bg-gray-800 border-b border-gray-700 px-6 py-4">
-            <div class="flex items-center justify-between">
-                <div>
-                    <!-- Breadcrumb or page title will go here -->
-                </div>
-                <div class="flex items-center space-x-4">
-                    <!-- Theme toggle -->
-                    <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-700">
-                        🌙
-                    </button>
-                    <!-- Notifications -->
-                    <button class="p-2 rounded-lg hover:bg-gray-700 relative">
-                        🔔
-                        <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-                    </button>
-                    <!-- User menu -->
-                    <div class="relative" @onfocusout="CloseUserMenu">
-                        <button @onclick="ToggleUserMenu" class="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1">
-                            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
-                                @(currentUser?.DisplayName?.Substring(0, 1).ToUpper() ?? "U")
-                            </div>
-                            <span class="text-sm">@(currentUser?.DisplayName ?? currentUser?.Username ?? "User")</span>
-                            <span class="text-gray-400 text-xs">▼</span>
-                        </button>
-
-                        @if (showUserMenu)
-                        {
-                            <div class="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
-                                <div class="px-4 py-3 border-b border-gray-700">
-                                    <p class="text-sm text-white font-medium">@(currentUser?.DisplayName ?? currentUser?.Username)</p>
-                                    <p class="text-xs text-gray-400">@currentUser?.Email</p>
-                                </div>
-                                <div class="py-1">
-                                    <a href="/settings" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
-                                        ⚙️ Settings
-                                    </a>
-                                    <button @onclick="Logout" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700">
-                                        🚪 Logout
-                                    </button>
-                                </div>
-                            </div>
-                        }
+    </div>
+}
+else
+{
+    <div class="flex min-h-screen">
+        <!-- Sidebar -->
+        <aside class="sidebar flex flex-col">
+            <!-- Logo -->
+            <div class="p-4 border-b border-gray-700">
+                <div class="flex items-center space-x-2">
+                    <span class="text-2xl">🔄</span>
+                    <div>
+                        <h1 class="text-lg font-bold text-white">XcluadeAgent</h1>
+                        <p class="text-xs text-gray-500">by xman studio</p>
                     </div>
                 </div>
             </div>
-        </header>
 
-        <!-- Page Content -->
-        <div class="flex-1 p-6 overflow-auto">
-            @Body
-        </div>
-    </main>
-</div>
+            <!-- Navigation -->
+            <nav class="flex-1 py-4">
+                <a href="/" class="sidebar-link">
+                    <span class="mr-3">📊</span>
+                    Dashboard
+                </a>
+                <a href="/projects" class="sidebar-link">
+                    <span class="mr-3">📁</span>
+                    Projects
+                </a>
+                <a href="/history" class="sidebar-link">
+                    <span class="mr-3">📜</span>
+                    Sync History
+                </a>
+                <a href="/ai-assistant" class="sidebar-link">
+                    <span class="mr-3">🤖</span>
+                    AI Assistant
+                </a>
+                <a href="/notifications" class="sidebar-link">
+                    <span class="mr-3">🔔</span>
+                    Notifications
+                </a>
+                <a href="/audit" class="sidebar-link">
+                    <span class="mr-3">📋</span>
+                    Audit Log
+                </a>
+
+                <div class="mt-4 px-4">
+                    <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Settings</p>
+                </div>
+                <a href="/settings" class="sidebar-link">
+                    <span class="mr-3">⚙️</span>
+                    Settings
+                </a>
+                <a href="/users" class="sidebar-link">
+                    <span class="mr-3">👥</span>
+                    Users
+                </a>
+                <a href="/license" class="sidebar-link">
+                    <span class="mr-3">📄</span>
+                    License
+                </a>
+                <a href="/update" class="sidebar-link">
+                    <span class="mr-3">⬆️</span>
+                    System Update
+                </a>
+            </nav>
+
+            <!-- Footer -->
+            <div class="p-4 border-t border-gray-700">
+                <div class="flex items-center justify-between text-sm text-gray-500">
+                    <span>v1.0.0</span>
+                    <a href="https://xman4289.com" target="_blank" class="hover:text-white">
+                        xman4289.com
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col">
+            <!-- Header -->
+            <header class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <!-- Breadcrumb or page title will go here -->
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- Theme toggle -->
+                        <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-700">
+                            🌙
+                        </button>
+                        <!-- Notifications -->
+                        <button class="p-2 rounded-lg hover:bg-gray-700 relative">
+                            🔔
+                            <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+                        <!-- User menu -->
+                        <div class="relative" @onfocusout="CloseUserMenu">
+                            <button @onclick="ToggleUserMenu" class="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1">
+                                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+                                    @(currentUser?.DisplayName?.Substring(0, 1).ToUpper() ?? currentUser?.Username?.Substring(0, 1).ToUpper() ?? "U")
+                                </div>
+                                <span class="text-sm">@(currentUser?.DisplayName ?? currentUser?.Username ?? "User")</span>
+                                <span class="text-gray-400 text-xs">▼</span>
+                            </button>
+
+                            @if (showUserMenu)
+                            {
+                                <div class="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
+                                    <div class="px-4 py-3 border-b border-gray-700">
+                                        <p class="text-sm text-white font-medium">@(currentUser?.DisplayName ?? currentUser?.Username)</p>
+                                        <p class="text-xs text-gray-400">@currentUser?.Email</p>
+                                    </div>
+                                    <div class="py-1">
+                                        <a href="/profile" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
+                                            👤 Profile
+                                        </a>
+                                        <a href="/settings" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
+                                            ⚙️ Settings
+                                        </a>
+                                        <button @onclick="Logout" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700">
+                                            🚪 Logout
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="flex-1 p-6 overflow-auto">
+                @Body
+            </div>
+        </main>
+    </div>
+}
 
 @code {
     private UserInfo? currentUser;
     private bool showUserMenu = false;
+    private bool isAuthenticated = false;
     private bool isInitialized = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -154,32 +173,85 @@
             var token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
             var userJson = await JS.InvokeAsync<string>("localStorage.getItem", "user");
 
-            var currentPath = new Uri(Navigation.Uri).AbsolutePath;
-
-            // Skip auth check for login page
-            if (currentPath == "/login")
-            {
-                return;
-            }
-
+            // No token - redirect to login
             if (string.IsNullOrEmpty(token))
             {
                 Navigation.NavigateTo("/login", forceLoad: true);
                 return;
             }
 
+            // Check if token is expired
+            if (IsTokenExpired(token))
+            {
+                await ClearAuthData();
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            // Load user data
             if (!string.IsNullOrEmpty(userJson))
             {
                 currentUser = JsonSerializer.Deserialize<UserInfo>(userJson, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
-                StateHasChanged();
             }
+
+            isAuthenticated = true;
+            StateHasChanged();
         }
         catch
         {
-            // Ignore errors during initialization
+            // Error - redirect to login
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+
+    private bool IsTokenExpired(string token)
+    {
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length != 3) return true;
+
+            var payload = parts[1];
+            // Add padding if needed for base64
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var jsonBytes = Convert.FromBase64String(payload.Replace('-', '+').Replace('_', '/'));
+            var json = System.Text.Encoding.UTF8.GetString(jsonBytes);
+            var doc = JsonDocument.Parse(json);
+
+            if (doc.RootElement.TryGetProperty("exp", out var expElement))
+            {
+                var exp = expElement.GetInt64();
+                var expDate = DateTimeOffset.FromUnixTimeSeconds(exp);
+                return expDate < DateTimeOffset.UtcNow;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private async Task ClearAuthData()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "authToken");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "refreshToken");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "user");
+        }
+        catch
+        {
+            // Ignore errors during cleanup
         }
     }
 
@@ -200,18 +272,7 @@
 
     private async Task Logout()
     {
-        try
-        {
-            // Clear localStorage
-            await JS.InvokeVoidAsync("localStorage.removeItem", "authToken");
-            await JS.InvokeVoidAsync("localStorage.removeItem", "refreshToken");
-            await JS.InvokeVoidAsync("localStorage.removeItem", "user");
-        }
-        catch
-        {
-            // Ignore errors
-        }
-
+        await ClearAuthData();
         Navigation.NavigateTo("/login", forceLoad: true);
     }
 

@@ -1,0 +1,112 @@
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@if (isAuthenticated)
+{
+    @ChildContent
+}
+else if (isChecking)
+{
+    <div class="flex items-center justify-center min-h-screen bg-gray-900">
+        <div class="text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 mb-4">
+                <span class="text-4xl animate-pulse">🔄</span>
+            </div>
+            <p class="text-gray-400">Loading...</p>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool isChecking = true;
+    private bool isAuthenticated = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await CheckAuthAsync();
+        }
+    }
+
+    private async Task CheckAuthAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            
+            if (string.IsNullOrEmpty(token))
+            {
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            // Validate token is not expired (basic check)
+            if (IsTokenExpired(token))
+            {
+                await ClearAuthData();
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            isAuthenticated = true;
+            isChecking = false;
+            StateHasChanged();
+        }
+        catch
+        {
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+
+    private bool IsTokenExpired(string token)
+    {
+        try
+        {
+            var parts = token.Split('.');
+            if (parts.Length != 3) return true;
+
+            var payload = parts[1];
+            // Add padding if needed
+            switch (payload.Length % 4)
+            {
+                case 2: payload += "=="; break;
+                case 3: payload += "="; break;
+            }
+
+            var jsonBytes = Convert.FromBase64String(payload.Replace('-', '+').Replace('_', '/'));
+            var json = System.Text.Encoding.UTF8.GetString(jsonBytes);
+            var doc = System.Text.Json.JsonDocument.Parse(json);
+            
+            if (doc.RootElement.TryGetProperty("exp", out var expElement))
+            {
+                var exp = expElement.GetInt64();
+                var expDate = DateTimeOffset.FromUnixTimeSeconds(exp);
+                return expDate < DateTimeOffset.UtcNow;
+            }
+            
+            return false;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private async Task ClearAuthData()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", "authToken");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "refreshToken");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "user");
+        }
+        catch
+        {
+            // Ignore errors during cleanup
+        }
+    }
+}
