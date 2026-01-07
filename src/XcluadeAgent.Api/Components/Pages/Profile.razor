@@ -1,0 +1,336 @@
+@page "/profile"
+@using System.Text.Json
+@using XcluadeAgent.Shared.DTOs
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Profile - XcluadeAgent</PageTitle>
+
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold text-white mb-6">My Profile</h1>
+
+    @if (isLoading)
+    {
+        <div class="card p-8 text-center">
+            <span class="text-gray-400">Loading...</span>
+        </div>
+    }
+    else if (user != null)
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Profile Card -->
+            <div class="card p-6">
+                <div class="text-center">
+                    <div class="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center text-white text-4xl font-bold mx-auto mb-4">
+                        @(user.DisplayName?.Substring(0, 1).ToUpper() ?? user.Username?.Substring(0, 1).ToUpper() ?? "U")
+                    </div>
+                    <h2 class="text-xl font-semibold text-white">@(user.DisplayName ?? user.Username)</h2>
+                    <p class="text-gray-400">@user.Email</p>
+                    <span class="inline-block mt-2 px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-sm">
+                        @user.Role
+                    </span>
+                </div>
+            </div>
+
+            <!-- Profile Details -->
+            <div class="lg:col-span-2 card p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Profile Information</h3>
+
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="bg-green-500/10 border border-green-500/50 rounded-lg p-4 mb-4 text-green-400">
+                        @successMessage
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-4 text-red-400">
+                        @errorMessage
+                    </div>
+                }
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Username</label>
+                        <input type="text" value="@user.Username" disabled
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-400 cursor-not-allowed" />
+                        <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Display Name</label>
+                        <input type="text" @bind="editModel.DisplayName"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Email</label>
+                        <input type="email" @bind="editModel.Email"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+
+                    <div class="pt-4">
+                        <button @onclick="SaveProfile" disabled="@isSaving"
+                                class="btn-primary px-6 py-2 @(isSaving ? "opacity-50 cursor-not-allowed" : "")">
+                            @(isSaving ? "Saving..." : "Save Changes")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Change Password -->
+            <div class="lg:col-span-3 card p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Change Password</h3>
+
+                @if (!string.IsNullOrEmpty(passwordSuccessMessage))
+                {
+                    <div class="bg-green-500/10 border border-green-500/50 rounded-lg p-4 mb-4 text-green-400">
+                        @passwordSuccessMessage
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(passwordErrorMessage))
+                {
+                    <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-4 text-red-400">
+                        @passwordErrorMessage
+                    </div>
+                }
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Current Password</label>
+                        <input type="password" @bind="passwordModel.CurrentPassword"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">New Password</label>
+                        <input type="password" @bind="passwordModel.NewPassword"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Confirm Password</label>
+                        <input type="password" @bind="passwordModel.ConfirmPassword"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+                </div>
+
+                <div class="pt-4">
+                    <button @onclick="ChangePassword" disabled="@isChangingPassword"
+                            class="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg @(isChangingPassword ? "opacity-50 cursor-not-allowed" : "")">
+                        @(isChangingPassword ? "Changing..." : "Change Password")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Account Info -->
+            <div class="lg:col-span-3 card p-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Account Information</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <p class="text-gray-400">Member Since</p>
+                        <p class="text-white">@user.CreatedAt.ToString("MMM dd, yyyy")</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400">Last Login</p>
+                        <p class="text-white">@(user.LastLoginAt?.ToString("MMM dd, yyyy HH:mm") ?? "Never")</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400">Two-Factor Auth</p>
+                        <p class="@(user.TwoFactorEnabled ? "text-green-400" : "text-yellow-400")">
+                            @(user.TwoFactorEnabled ? "Enabled" : "Disabled")
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-gray-400">GitHub</p>
+                        <p class="@(user.GitHubLinked ? "text-green-400" : "text-gray-500")">
+                            @(user.GitHubLinked ? user.GitHubUsername : "Not Linked")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card p-8 text-center">
+            <span class="text-red-400">Failed to load profile</span>
+        </div>
+    }
+</div>
+
+@code {
+    private UserDto? user;
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private bool isChangingPassword = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? passwordErrorMessage;
+    private string? passwordSuccessMessage;
+    private string? authToken;
+
+    private EditProfileModel editModel = new();
+    private ChangePasswordModel passwordModel = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadProfile();
+        }
+    }
+
+    private async Task LoadProfile()
+    {
+        try
+        {
+            authToken = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var userJson = await JS.InvokeAsync<string>("localStorage.getItem", "user");
+
+            if (!string.IsNullOrEmpty(userJson))
+            {
+                user = JsonSerializer.Deserialize<UserDto>(userJson, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (user != null)
+                {
+                    editModel.DisplayName = user.DisplayName;
+                    editModel.Email = user.Email;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load profile: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        if (user == null) return;
+
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Put, $"api/v1/users/{user.Id}");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authToken);
+            request.Content = JsonContent.Create(new
+            {
+                email = editModel.Email,
+                displayName = editModel.DisplayName
+            });
+
+            var response = await Http.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Update local storage
+                user.DisplayName = editModel.DisplayName;
+                user.Email = editModel.Email ?? user.Email;
+                await JS.InvokeVoidAsync("localStorage.setItem", "user", JsonSerializer.Serialize(user));
+
+                successMessage = "Profile updated successfully!";
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to update profile: {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        if (string.IsNullOrEmpty(passwordModel.CurrentPassword) ||
+            string.IsNullOrEmpty(passwordModel.NewPassword) ||
+            string.IsNullOrEmpty(passwordModel.ConfirmPassword))
+        {
+            passwordErrorMessage = "All password fields are required";
+            return;
+        }
+
+        if (passwordModel.NewPassword != passwordModel.ConfirmPassword)
+        {
+            passwordErrorMessage = "New passwords do not match";
+            return;
+        }
+
+        if (passwordModel.NewPassword.Length < 8)
+        {
+            passwordErrorMessage = "Password must be at least 8 characters";
+            return;
+        }
+
+        isChangingPassword = true;
+        passwordErrorMessage = null;
+        passwordSuccessMessage = null;
+
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/auth/change-password");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authToken);
+            request.Content = JsonContent.Create(new
+            {
+                currentPassword = passwordModel.CurrentPassword,
+                newPassword = passwordModel.NewPassword,
+                confirmPassword = passwordModel.ConfirmPassword
+            });
+
+            var response = await Http.SendAsync(request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                passwordSuccessMessage = "Password changed successfully!";
+                passwordModel = new ChangePasswordModel();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                passwordErrorMessage = $"Failed to change password: {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            passwordErrorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isChangingPassword = false;
+        }
+    }
+
+    private class EditProfileModel
+    {
+        public string? DisplayName { get; set; }
+        public string? Email { get; set; }
+    }
+
+    private class ChangePasswordModel
+    {
+        public string CurrentPassword { get; set; } = "";
+        public string NewPassword { get; set; } = "";
+        public string ConfirmPassword { get; set; } = "";
+    }
+}
