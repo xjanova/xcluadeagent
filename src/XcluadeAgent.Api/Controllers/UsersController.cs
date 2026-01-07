@@ -143,7 +143,7 @@ public class UsersController : ControllerBase
             Username = User.Identity?.Name,
             Action = "UserCreated",
             EntityType = "User",
-            EntityId = user.Id.ToString(),
+            EntityId = user.Id,
             NewValue = $"Created user: {user.Username}",
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
         });
@@ -215,7 +215,7 @@ public class UsersController : ControllerBase
             Username = User.Identity?.Name,
             Action = "UserUpdated",
             EntityType = "User",
-            EntityId = user.Id.ToString(),
+            EntityId = user.Id,
             NewValue = $"Updated user: {user.Username}",
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
         });
@@ -275,7 +275,7 @@ public class UsersController : ControllerBase
             Username = User.Identity?.Name,
             Action = "UserDeleted",
             EntityType = "User",
-            EntityId = id.ToString(),
+            EntityId = id,
             OldValue = $"Deleted user: {user.Username}",
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
         });
@@ -313,7 +313,7 @@ public class UsersController : ControllerBase
             Username = User.Identity?.Name,
             Action = "PasswordReset",
             EntityType = "User",
-            EntityId = id.ToString(),
+            EntityId = id,
             NewValue = $"Password reset for user: {user.Username}",
             IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
         });
