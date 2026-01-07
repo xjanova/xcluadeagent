@@ -478,10 +478,9 @@
             await hubConnection.SendAsync("SubscribeToAllSyncs");
             isConnected = true;
         }
-        catch (Exception ex)
+        catch
         {
             // SignalR is optional, continue without real-time updates
-            Console.WriteLine($"SignalR connection failed: {ex.Message}");
         }
     }
 
