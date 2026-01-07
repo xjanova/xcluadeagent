@@ -85,7 +85,64 @@
         .syncing {
             animation: pulse 2s infinite;
         }
+
+        /* Hide body until auth check completes */
+        body.auth-checking {
+            visibility: hidden;
+        }
     </style>
+    <script>
+        // Auth check - runs BEFORE page renders
+        (function() {
+            var currentPath = window.location.pathname;
+            var publicPaths = ['/login', '/forgot-password', '/reset-password'];
+
+            // Skip auth check for public paths
+            if (publicPaths.some(function(p) { return currentPath.startsWith(p); })) {
+                return;
+            }
+
+            var token = localStorage.getItem('authToken');
+
+            // No token - redirect to login immediately
+            if (!token) {
+                window.location.replace('/login');
+                return;
+            }
+
+            // Check if token is expired
+            try {
+                var parts = token.split('.');
+                if (parts.length === 3) {
+                    var payload = parts[1];
+                    // Add padding for base64
+                    while (payload.length % 4) {
+                        payload += '=';
+                    }
+                    var decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+                    var data = JSON.parse(decoded);
+
+                    if (data.exp) {
+                        var expDate = new Date(data.exp * 1000);
+                        if (expDate < new Date()) {
+                            // Token expired - clear and redirect
+                            localStorage.removeItem('authToken');
+                            localStorage.removeItem('refreshToken');
+                            localStorage.removeItem('user');
+                            window.location.replace('/login');
+                            return;
+                        }
+                    }
+                }
+            } catch (e) {
+                // Invalid token - clear and redirect
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
+                window.location.replace('/login');
+            }
+        })();
+    </script>
 </head>
 
 <body>
