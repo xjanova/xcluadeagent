@@ -119,14 +119,26 @@
     private bool isLoading = false;
     private bool requiresTwoFactor = false;
     private string twoFactorCode = "";
+    private bool hasCheckedAuth = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check if already logged in
-        var token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
-        if (!string.IsNullOrEmpty(token))
+        if (firstRender && !hasCheckedAuth)
         {
-            Navigation.NavigateTo("/", forceLoad: true);
+            hasCheckedAuth = true;
+            // Check if already logged in
+            try
+            {
+                var token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+                if (!string.IsNullOrEmpty(token))
+                {
+                    Navigation.NavigateTo("/", forceLoad: true);
+                }
+            }
+            catch
+            {
+                // Ignore JS interop errors
+            }
         }
     }
 
