@@ -217,7 +217,7 @@ public class DashboardController : ControllerBase
         return health;
     }
 
-    private LicenseInfoDto MapLicenseInfo(LicenseInfo info) => new()
+    private XcluadeAgent.Shared.DTOs.LicenseInfoDto MapLicenseInfo(LicenseInfo info) => new()
     {
         Type = info.TypeName,
         TypeColor = LicenseTypeNames.GetBadgeColor(info.Type),

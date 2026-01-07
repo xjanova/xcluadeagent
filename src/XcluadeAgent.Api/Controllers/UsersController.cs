@@ -58,7 +58,7 @@ public class UsersController : ControllerBase
         {
             Users = userDtos,
             TotalCount = userDtos.Count,
-            UserLimit = license?.UserLimit ?? 1
+            UserLimit = license?.MaxUsers ?? 1
         }));
     }
 
@@ -100,9 +100,9 @@ public class UsersController : ControllerBase
         var license = await _licenseService.GetCurrentLicenseAsync();
         var currentCount = await _userRepository.CountAsync();
 
-        if (license != null && currentCount >= license.UserLimit)
+        if (license != null && currentCount >= license.MaxUsers)
         {
-            return BadRequest(ApiResponse.Fail($"User limit reached ({license.UserLimit}). Please upgrade your license."));
+            return BadRequest(ApiResponse.Fail($"User limit reached ({license.MaxUsers}). Please upgrade your license."));
         }
 
         // Check if username exists

@@ -46,8 +46,8 @@ public class LicenseController : ControllerBase
             UsersLimit = info.UsersLimit,
             Features = new LicenseFeaturesDto
             {
-                MaxProjects = info.Features.MaxProjects,
-                MaxUsers = info.Features.MaxUsers,
+                MaxProjects = info.MaxProjects,
+                MaxUsers = info.MaxUsers,
                 ApiAccess = info.Features.ApiAccess,
                 AiAssistant = info.Features.AiAssistant,
                 MultiEnvironment = info.Features.MultiEnvironment,
