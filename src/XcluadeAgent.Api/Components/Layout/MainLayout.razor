@@ -1,4 +1,7 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@using System.Text.Json
 
 <div class="flex min-h-screen">
     <!-- Sidebar -->
@@ -88,11 +91,32 @@
                         <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
                     </button>
                     <!-- User menu -->
-                    <div class="flex items-center space-x-2">
-                        <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
-                            A
-                        </div>
-                        <span class="text-sm">Admin</span>
+                    <div class="relative" @onfocusout="CloseUserMenu">
+                        <button @onclick="ToggleUserMenu" class="flex items-center space-x-2 hover:bg-gray-700 rounded-lg px-2 py-1">
+                            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+                                @(currentUser?.DisplayName?.Substring(0, 1).ToUpper() ?? "U")
+                            </div>
+                            <span class="text-sm">@(currentUser?.DisplayName ?? currentUser?.Username ?? "User")</span>
+                            <span class="text-gray-400 text-xs">▼</span>
+                        </button>
+
+                        @if (showUserMenu)
+                        {
+                            <div class="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
+                                <div class="px-4 py-3 border-b border-gray-700">
+                                    <p class="text-sm text-white font-medium">@(currentUser?.DisplayName ?? currentUser?.Username)</p>
+                                    <p class="text-xs text-gray-400">@currentUser?.Email</p>
+                                </div>
+                                <div class="py-1">
+                                    <a href="/settings" class="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700">
+                                        ⚙️ Settings
+                                    </a>
+                                    <button @onclick="Logout" class="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700">
+                                        🚪 Logout
+                                    </button>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </div>
             </div>
@@ -104,3 +128,95 @@
         </div>
     </main>
 </div>
+
+@code {
+    private UserInfo? currentUser;
+    private bool showUserMenu = false;
+    private bool isInitialized = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isInitialized)
+        {
+            isInitialized = true;
+            await CheckAuthenticationAsync();
+        }
+    }
+
+    private async Task CheckAuthenticationAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+            var userJson = await JS.InvokeAsync<string>("localStorage.getItem", "user");
+
+            var currentPath = new Uri(Navigation.Uri).AbsolutePath;
+
+            // Skip auth check for login page
+            if (currentPath == "/login")
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(token))
+            {
+                Navigation.NavigateTo("/login", forceLoad: true);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(userJson))
+            {
+                currentUser = JsonSerializer.Deserialize<UserInfo>(userJson, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                StateHasChanged();
+            }
+        }
+        catch
+        {
+            // Ignore errors during initialization
+        }
+    }
+
+    private void ToggleUserMenu()
+    {
+        showUserMenu = !showUserMenu;
+    }
+
+    private void CloseUserMenu()
+    {
+        // Delay to allow click events to process
+        Task.Delay(200).ContinueWith(_ =>
+        {
+            showUserMenu = false;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private async Task Logout()
+    {
+        try
+        {
+            // Clear localStorage
+            await JS.InvokeVoidAsync("localStorage.removeItem", "authToken");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "refreshToken");
+            await JS.InvokeVoidAsync("localStorage.removeItem", "user");
+        }
+        catch
+        {
+            // Ignore errors
+        }
+
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    public class UserInfo
+    {
+        public Guid Id { get; set; }
+        public string? Username { get; set; }
+        public string? Email { get; set; }
+        public string? DisplayName { get; set; }
+        public string? Role { get; set; }
+    }
+}

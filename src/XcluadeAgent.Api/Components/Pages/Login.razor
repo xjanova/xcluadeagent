@@ -1,0 +1,261 @@
+@page "/login"
+@layout XcluadeAgent.Api.Components.Layout.EmptyLayout
+@using System.Text.Json
+@using XcluadeAgent.Shared.DTOs
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Login - XcluadeAgent</PageTitle>
+
+<div class="min-h-screen flex items-center justify-center bg-gray-900">
+    <div class="w-full max-w-md">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 mb-4">
+                <span class="text-4xl">🔄</span>
+            </div>
+            <h1 class="text-2xl font-bold text-white">XcluadeAgent</h1>
+            <p class="text-gray-400 text-sm">GitHub Sync Service</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="card p-8">
+            <h2 class="text-xl font-semibold text-white mb-6 text-center">Sign In</h2>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6 text-red-400 text-sm">
+                    @errorMessage
+                </div>
+            }
+
+            @if (requiresTwoFactor)
+            {
+                <!-- 2FA Form -->
+                <div class="space-y-4">
+                    <p class="text-gray-400 text-sm text-center mb-4">
+                        Enter the 6-digit code from your authenticator app
+                    </p>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Authentication Code</label>
+                        <input type="text"
+                               @bind="twoFactorCode"
+                               @bind:event="oninput"
+                               maxlength="6"
+                               placeholder="000000"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white text-center text-2xl tracking-widest focus:outline-none focus:border-blue-500" />
+                    </div>
+                    <button @onclick="SubmitTwoFactor"
+                            disabled="@isLoading"
+                            class="w-full btn-primary py-3 font-semibold @(isLoading ? "opacity-50 cursor-not-allowed" : "")">
+                        @if (isLoading)
+                        {
+                            <span>Verifying...</span>
+                        }
+                        else
+                        {
+                            <span>Verify</span>
+                        }
+                    </button>
+                    <button @onclick="CancelTwoFactor" class="w-full text-gray-400 hover:text-white text-sm py-2">
+                        Back to Login
+                    </button>
+                </div>
+            }
+            else
+            {
+                <!-- Login Form -->
+                <EditForm Model="@loginModel" OnValidSubmit="HandleLogin" class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Username</label>
+                        <input type="text"
+                               @bind="loginModel.Username"
+                               placeholder="Enter username"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Password</label>
+                        <input type="password"
+                               @bind="loginModel.Password"
+                               placeholder="Enter password"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500" />
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center text-sm text-gray-400">
+                            <input type="checkbox" @bind="loginModel.RememberMe" class="mr-2 rounded" />
+                            Remember me
+                        </label>
+                    </div>
+
+                    <button type="submit"
+                            disabled="@isLoading"
+                            class="w-full btn-primary py-3 font-semibold @(isLoading ? "opacity-50 cursor-not-allowed" : "")">
+                        @if (isLoading)
+                        {
+                            <span>Signing in...</span>
+                        }
+                        else
+                        {
+                            <span>Sign In</span>
+                        }
+                    </button>
+                </EditForm>
+            }
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-6 text-gray-500 text-sm">
+            <p>Developed by <a href="https://xman4289.com" target="_blank" class="text-blue-400 hover:underline">xman studio</a></p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel loginModel = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+    private bool requiresTwoFactor = false;
+    private string twoFactorCode = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if already logged in
+        var token = await JS.InvokeAsync<string>("localStorage.getItem", "authToken");
+        if (!string.IsNullOrEmpty(token))
+        {
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        if (string.IsNullOrWhiteSpace(loginModel.Username) || string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            errorMessage = "Please enter username and password";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/v1/auth/login", new
+            {
+                username = loginModel.Username,
+                password = loginModel.Password,
+                rememberMe = loginModel.RememberMe,
+                twoFactorCode = (string?)null
+            });
+
+            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+            if (result == null)
+            {
+                errorMessage = "Invalid response from server";
+                return;
+            }
+
+            if (result.RequiresTwoFactor)
+            {
+                requiresTwoFactor = true;
+                errorMessage = null;
+                return;
+            }
+
+            if (result.Success && !string.IsNullOrEmpty(result.Token))
+            {
+                // Store token in localStorage
+                await JS.InvokeVoidAsync("localStorage.setItem", "authToken", result.Token);
+                await JS.InvokeVoidAsync("localStorage.setItem", "refreshToken", result.RefreshToken);
+                await JS.InvokeVoidAsync("localStorage.setItem", "user", JsonSerializer.Serialize(result.User));
+
+                // Redirect to home
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage ?? "Login failed";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SubmitTwoFactor()
+    {
+        if (string.IsNullOrWhiteSpace(twoFactorCode) || twoFactorCode.Length != 6)
+        {
+            errorMessage = "Please enter a valid 6-digit code";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/v1/auth/login", new
+            {
+                username = loginModel.Username,
+                password = loginModel.Password,
+                rememberMe = loginModel.RememberMe,
+                twoFactorCode = twoFactorCode
+            });
+
+            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+            if (result == null)
+            {
+                errorMessage = "Invalid response from server";
+                return;
+            }
+
+            if (result.Success && !string.IsNullOrEmpty(result.Token))
+            {
+                // Store token in localStorage
+                await JS.InvokeVoidAsync("localStorage.setItem", "authToken", result.Token);
+                await JS.InvokeVoidAsync("localStorage.setItem", "refreshToken", result.RefreshToken);
+                await JS.InvokeVoidAsync("localStorage.setItem", "user", JsonSerializer.Serialize(result.User));
+
+                // Redirect to home
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage ?? "Invalid code";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Connection error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CancelTwoFactor()
+    {
+        requiresTwoFactor = false;
+        twoFactorCode = "";
+        errorMessage = null;
+    }
+
+    public class LoginModel
+    {
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+        public bool RememberMe { get; set; }
+    }
+}
