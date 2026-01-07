@@ -393,6 +393,7 @@ app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 
 // API routes
 app.MapControllers();
