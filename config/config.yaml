@@ -1,0 +1,66 @@
+# XcluadeAgent Configuration
+# This is a minimal configuration to get started
+
+# Server Configuration
+Server:
+  Port: 5000
+  Host: "0.0.0.0"
+  ExternalUrl: "http://localhost:5000"
+
+# Data Path
+DataPath: "data"
+
+# Database Configuration
+Database:
+  ConnectionString: "Data Source=data/xcluadeagent.db"
+
+# GitHub Configuration
+GitHub:
+  AccessToken: ""  # Optional: Add your GitHub token for API access
+  WebhookSecret: ""  # Optional: Set if you want to use GitHub webhooks
+
+# Security Configuration
+Security:
+  JwtSecret: ""  # Leave empty to auto-generate (will be persisted)
+  AllowedOrigins:
+    - "http://localhost:5000"
+    - "http://localhost:3000"
+
+# AI Configuration (Optional)
+Ai:
+  Enabled: false  # Set to true when you have an AI service configured
+  Mode: "suggest"  # off | alert | suggest | review | sandbox | auto
+  Primary:
+    Type: "ollama"  # ollama | claude | openai
+    Endpoint: "http://localhost:11434"
+    Model: "qwen2.5-coder:7b"
+
+# Notifications Configuration (Optional)
+Notifications:
+  Discord:
+    Enabled: false
+    WebhookUrl: ""
+  Telegram:
+    Enabled: false
+    BotToken: ""
+    ChatId: ""
+  Line:
+    Enabled: false
+    ChannelAccessToken: ""
+  Email:
+    Enabled: false
+    SmtpServer: ""
+    SmtpPort: 587
+    From: ""
+    Username: ""
+    Password: ""
+
+# Logging Configuration
+Logging:
+  Path: "data/logs"
+  RetentionDays: 30
+  MinimumLevel:
+    Default: "Information"
+    Override:
+      Microsoft: "Warning"
+      System: "Warning"
