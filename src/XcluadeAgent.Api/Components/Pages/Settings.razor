@@ -1,5 +1,8 @@
 @page "/settings"
+@using XcluadeAgent.Shared.DTOs
+@using System.Net.Http.Json
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Settings - XcluadeAgent</PageTitle>
 
@@ -9,6 +12,20 @@
         <h1 class="text-2xl font-bold">Settings</h1>
         <p class="text-gray-400">Configure your XcluadeAgent installation</p>
     </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg">
+            @errorMessage
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="bg-green-500/20 border border-green-500 text-green-300 p-4 rounded-lg">
+            @successMessage
+        </div>
+    }
 
     <!-- Settings Navigation -->
     <div class="flex space-x-1 border-b border-gray-700">
@@ -354,6 +371,10 @@
 @code {
     private string activeTab = "general";
     private SettingsModel settings = new();
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? errorMessage;
+    private string? successMessage;
 
     private Dictionary<string, string> tabs = new()
     {
@@ -390,38 +411,152 @@
 
     private async Task LoadSettings()
     {
-        // TODO: Load from API
-        settings = new SettingsModel
+        isLoading = true;
+        errorMessage = null;
+
+        try
         {
-            Port = 5000,
-            ExternalUrl = "http://localhost:5000",
-            DataDir = "/var/lib/xcluadeagent",
-            AutoSync = true,
-            CreateBackups = true,
-            BackupRetentionDays = 7,
-            AiEnabled = true,
-            AiMode = "suggest",
-            AiProvider = "ollama",
-            OllamaEndpoint = "http://localhost:11434",
-            OllamaModel = "qwen2.5-coder:7b",
-            AiBudgetEnabled = false,
-            AiBudgetLimit = 10,
-            AiBudgetUsed = 0,
-            SessionTimeout = 60,
-            Require2FA = false,
-            ApiEnabled = true,
-            RateLimit = 60
-        };
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await Http.GetFromJsonAsync<ApiResponse<SettingsDto>>("/api/v1/settings");
+            if (response?.Success == true && response.Data != null)
+            {
+                var data = response.Data;
+                settings = new SettingsModel
+                {
+                    Port = data.Server?.Port ?? 5000,
+                    ExternalUrl = data.Server?.ExternalUrl ?? "http://localhost:5000",
+                    DataDir = data.Server?.DataDirectory ?? "/var/lib/xcluadeagent",
+                    AutoSync = data.Sync?.AutoSync ?? true,
+                    CreateBackups = data.Sync?.BackupBeforeSync ?? true,
+                    BackupRetentionDays = data.Sync?.BackupRetentionDays ?? 7,
+                    AiEnabled = data.Ai?.Enabled ?? false,
+                    AiMode = data.Ai?.Mode ?? "off",
+                    AiProvider = data.Ai?.Provider?.ToLower() ?? "ollama",
+                    OllamaEndpoint = data.Ai?.OllamaEndpoint ?? "http://localhost:11434",
+                    OllamaModel = data.Ai?.OllamaModel ?? "qwen2.5-coder:7b",
+                    AiBudgetEnabled = data.Ai?.BudgetEnabled ?? false,
+                    AiBudgetLimit = data.Ai?.MonthlyBudgetUsd ?? 10,
+                    AiBudgetUsed = 0,
+                    SessionTimeout = data.Security?.SessionTimeoutMinutes ?? 60,
+                    Require2FA = data.Security?.Require2FaForAdmins ?? false,
+                    ApiEnabled = data.Security?.ApiEnabled ?? true,
+                    RateLimit = data.Security?.RateLimitPerMinute ?? 60
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load settings: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private async Task SaveSettings()
     {
-        // TODO: Save to API
+        isSaving = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            // Save server settings
+            await Http.PutAsJsonAsync("/api/v1/settings/server", new
+            {
+                Port = settings.Port,
+                ExternalUrl = settings.ExternalUrl,
+                DataDirectory = settings.DataDir
+            });
+
+            // Save sync settings
+            await Http.PutAsJsonAsync("/api/v1/settings/sync", new
+            {
+                AutoSync = settings.AutoSync,
+                BackupBeforeSync = settings.CreateBackups,
+                BackupRetentionDays = settings.BackupRetentionDays
+            });
+
+            // Save AI settings
+            await Http.PutAsJsonAsync("/api/v1/settings/ai", new
+            {
+                Enabled = settings.AiEnabled,
+                Mode = settings.AiMode,
+                Provider = settings.AiProvider,
+                OllamaEndpoint = settings.OllamaEndpoint,
+                OllamaModel = settings.OllamaModel,
+                ClaudeApiKey = settings.ClaudeApiKey,
+                ClaudeModel = settings.ClaudeModel,
+                OpenAiApiKey = settings.OpenAiApiKey,
+                OpenAiModel = settings.OpenAiModel,
+                BudgetEnabled = settings.AiBudgetEnabled,
+                MonthlyBudgetUsd = settings.AiBudgetLimit
+            });
+
+            // Save security settings
+            await Http.PutAsJsonAsync("/api/v1/settings/security", new
+            {
+                SessionTimeoutMinutes = settings.SessionTimeout,
+                Require2FaForAdmins = settings.Require2FA,
+                ApiEnabled = settings.ApiEnabled,
+                RateLimitPerMinute = settings.RateLimit
+            });
+
+            successMessage = "Settings saved successfully";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to save settings: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
     }
 
-    private void ResetSettings()
+    private async Task ResetSettings()
     {
-        // TODO: Reset to defaults
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                Http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await Http.PostAsync("/api/v1/settings/reset?section=all", null);
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Settings reset to defaults";
+                await LoadSettings();
+            }
+            else
+            {
+                errorMessage = "Failed to reset settings";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to reset settings: {ex.Message}";
+        }
     }
 
     private void GenerateSecret()

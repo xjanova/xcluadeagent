@@ -345,15 +345,16 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
             // AWS
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(1) };
 
+            // AWS metadata endpoint probe
             try
             {
                 var awsResponse = await httpClient.GetAsync("http://169.254.169.254/latest/meta-data/");
                 if (awsResponse.IsSuccessStatusCode)
                     return "AWS";
             }
-            catch { }
+            catch { /* Timeout/error means not AWS - continue to next provider */ }
 
-            // GCP
+            // GCP metadata endpoint probe
             try
             {
                 var request = new HttpRequestMessage(HttpMethod.Get, "http://metadata.google.internal/computeMetadata/v1/");
@@ -362,9 +363,9 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                 if (gcpResponse.IsSuccessStatusCode)
                     return "GCP";
             }
-            catch { }
+            catch { /* Timeout/error means not GCP - continue to next provider */ }
 
-            // Azure
+            // Azure metadata endpoint probe
             try
             {
                 var request = new HttpRequestMessage(HttpMethod.Get, "http://169.254.169.254/metadata/instance?api-version=2021-02-01");
@@ -373,18 +374,18 @@ public class EnvironmentAnalyzer : IEnvironmentAnalyzer
                 if (azureResponse.IsSuccessStatusCode)
                     return "Azure";
             }
-            catch { }
+            catch { /* Timeout/error means not Azure - continue to next provider */ }
 
-            // DigitalOcean
+            // DigitalOcean metadata endpoint probe
             try
             {
                 var doResponse = await httpClient.GetAsync("http://169.254.169.254/metadata/v1/");
                 if (doResponse.IsSuccessStatusCode)
                     return "DigitalOcean";
             }
-            catch { }
+            catch { /* Timeout/error means not DigitalOcean */ }
         }
-        catch { }
+        catch { /* Unable to detect cloud provider */ }
 
         return null;
     }
