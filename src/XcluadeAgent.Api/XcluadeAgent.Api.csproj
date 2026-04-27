@@ -19,17 +19,17 @@
 
   <ItemGroup>
     <!-- Authentication -->
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.23" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.26" />
 
     <!-- API Documentation -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.1" />
-    <PackageReference Include="Microsoft.OpenApi" Version="3.3.1" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.5.3" />
 
     <!-- Blazor -->
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.23" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.26" />
 
     <!-- SignalR Client for Blazor components -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
 
     <!-- YAML Configuration -->
     <PackageReference Include="NetEscapades.Configuration.Yaml" Version="3.1.0" />
@@ -38,7 +38,7 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
 
     <!-- Systemd integration for Linux service -->
-    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.7" />
   </ItemGroup>
 
 </Project>
